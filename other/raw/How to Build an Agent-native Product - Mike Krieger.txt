@@ -1,0 +1,719 @@
+The models today are good at adding features.
+They're not necessarily good about figuring out what to cut out of the product.
+You can get it to go zero, not it's zero to one, but zero to end pretty quickly over the matter of hours.
+It's made a lot of decisions along the way.
+And some of the sort of intuitions you've built about what are the right things to put in there,
+I think you build over time.
+I feel like that is the art and science of software design in 2026.
+Work moves fast and in the age of AI, the pressure isn't just to move faster.
+It's to make sure that what you send actually sounds like you.
+From emails to proposals to stakeholder updates, generic and rush just doesn't cut it.
+If you've ever stared at a blank page knowing exactly what you want to say,
+but not how to start, Grammarly fixes that.
+Grammarly gives you one place to think, write and finish your work.
+Write where you already write.
+Most AI tools either take over or stay out of the way.
+Grammarly does neither.
+It helps you break the blank page, adjust your tone,
+so a message lands right for the specific person reading it,
+and works seamlessly across more than 500,000 apps and sites that you're already using.
+It's loaded with agents built for every step of your process.
+And 90% of professionals say it saved them time.
+93% say it helps them get more done.
+This is AI that works with you, not over you.
+In a world of generic AI, don't sound like everyone else.
+With Grammarly, you never will.
+Download Grammarly for free at Grammarly.com.
+That's Grammarly.com.
+Mike, welcome to the show.
+Great to be here.
+Thanks for having me on.
+Great to have you.
+I'm super excited.
+For people who don't know, you are the co-founder of Instagram
+and now you are at Anthropic and Anthropic Labs.
+I've admired your work from afar, both at Anthropic and at Instagram,
+for a really long time.
+And you're obviously at the forefront of building products in AI.
+So thank you for coming on.
+Absolutely.
+Where should we start?
+Like, what we were talking about just now in the pre-production is
+what has gotten easier and what has gotten harder or maybe stayed the same in product
+building as the underlying substrate or the process by which we build products
+has changed completely.
+Tell me about your experience now versus earlier in Anthropic versus Instagram
+and how you think things are changing?
+Yeah, I was doing the thought exercise a couple of weeks ago.
+The Instagram story, we had another product called Bourbon.
+We worked on that for almost a year.
+It wasn't working.
+We pivoted.
+We basically spent three months building what became Instagram,
+launched it, and then scaled it.
+So I was asking the question, what is now trivial and what was actually inherent in
+that building process that doesn't get easier?
+That year, we probably could have hit some of the dead ends.
+We had eventually hit sooner, but there was value in getting there too.
+We overcomplicated the product so that we then had to simplify it.
+I find even the models today are good at adding features.
+They're not necessarily good about figuring out what to cut out of the product.
+And that took a lot of just hitting actual real-world usage.
+And there was something about the process of incrementally adding things right now.
+I mean, today, especially some of the stuff we're building in labs,
+you can get it to go 0, not just 0 to 1, but 0 to n pretty quickly over the matter of hours.
+But it's made a lot of decisions along the way.
+And yeah, you can ask it to follow up with you and then do input.
+But some of the intuitions you build about what are the right things to put in there,
+I think you build over time.
+And so I've been reflecting, there haven't been a lot of breakout consumer products
+even in the age of accelerated AI building.
+And I think part of it is because it just still takes time to hone your view
+about what sort of intervention you want to make on the world and then build from there.
+Now, the actual building part, once you know what to build is, of course, so much easier.
+I had Claude basically rebuild Bourbon.
+It took about two hours.
+It was feature complete.
+It added filters, which Bourbon didn't have.
+We added those for Instagram.
+But I think it knew the eventual future of the products that decided to build that in.
+So I think that part feels really different.
+But I think there's also, I remember there was a week where Kevin went off
+and built all the filters for Instagram P1.
+I went off and built the rest of the app.
+And sitting there, I would stay up till 4 a.m. and then sleep till noon.
+That's my natural day-night cycle.
+And in that process, you're making so many decisions.
+Like, how should location work?
+We've got to find a way of accelerating building while still sort of helping people
+build intuition of those decisions along the way.
+Because otherwise, I think you either just get very generic products that are unlikely to
+break out or ones that just don't reflect some deeper intuition that you come to
+about your space or your product.
+This is great.
+I love this.
+It's making me think of two things.
+One is, I have this little thing in my head that if you grow a tree without it,
+like with it being indoors, without it being exposed to wind, it doesn't get as strong.
+As, because as it's growing, it needs all these forces pushing it like back and forth
+in order to like make it a real tree.
+And so if you, if you have it indoors without wind, it, you're going to grow a tree, but
+like leans and it gets all, and it's not as strong and it's not, it's not the same thing.
+And I think there's something that you're saying here where because we've accelerated
+the pace of development so drastically, what would normally be this sort of incremental
+thing where you're doing things one at a time and then you're exposing it to users,
+you can actually kind of grow an entire tree indoors.
+And then you have this like whole thing that you're just like,
+it doesn't have the same level of intuition and exposure to experience at each step that,
+that creates a great product.
+Is that, is that, is that?
+I love that.
+I, I, I love that metaphor too.
+We, you know, when we were starting Instagram, we had this, we were very into like Eric Reis
+and Lean Startup and the whole like Yagney, like you ain't going to need it principle.
+And I have found, and actually even one of the things I was working on in labs recently,
+we way overbuilt for V1 before we even got to early access because you can like,
+oh, well, we have this option.
+Why not add this one as well?
+That's like, that's a PR of work.
+And if you get a really good flow and cloud code, you know, you're firing things off,
+you're going to lunch, you're coming back, the thing is done.
+You're like, great, we added it.
+And the thing we realized was we created this sort of matrix of functionality that was actually
+quite hard to test and, and keep up with right before launch or even to explain to people,
+like they're arriving.
+The metaphor is somebody else gave me, which I really like is the difference between sort
+of getting episode by episode, getting no characters in a TV show versus imagine like
+you're thrown into the final episode and you're like, wait, what are all these things?
+And who are all these people?
+And like, I already, you know, I'm expected to have all of this context.
+I think there's the same kind of feeling around like developing something over time.
+But the tree metaphor, I think sticks too as well.
+And so like showing somebody the fully formed tree is also kind of a lot all at once.
+And I think there's, there's definitely something there and how do you build product
+these days and still keep it simple and not because just because you can doesn't necessarily
+mean that it should be in at least the first version.
+I'm having the same problem because, you know, I was, I was literally up until 4am
+debugging and, and fixing this app that I made, like on the side at every called proof,
+which is a agent native collaborative market editor.
+So you can like share, share a really quick plan docs and stuff with your team or with
+other agents and you have little presence and it's really fun.
+And this is like my second or third iteration of the full product end to end,
+which is really interesting that you can do now.
+But the first couple of iterations, I just found myself because vibe coding is so fun
+and so addictive.
+I just found myself being like, yeah, like I'll do this and I'll do this and like,
+and it just created this monstrosity that wasn't that good, wasn't that good to use.
+And I got really inspired by we have another product called monologue,
+which I'm not sure if you've run into or not.
+But I got really inspired by monologue, which is a really simple speech text that run by
+Jim Navin, who he's just so focused on making one simple thing work so well.
+And I saw how well that works in this age of just like,
+anyone can make a product is like selling that super polish and just super good at what it does.
+And so I just basically threw out the product and started over with this very simple,
+like it's just a shareable markdown link.
+And that then just like started growing virally inside of every,
+like everyone started using it all the time.
+And then now we launched it and it just blew up.
+And so I spent all last night like not sleeping trying to fix it.
+Everything like, I'm too old for this shit.
+I can't can't be doing this anymore.
+Because it just reminded me of like being in my 20s or like being in college and like
+hacking on stuff and whatever, which is fun.
+But also exhausting.
+And so yeah, I've found that I've had to really modify my psychology because so much is possible.
+How are you dealing with that?
+Yeah, just as a brief aside on that, I remember with Bourbon,
+our biggest mistake was adding functionality over time rather than deleting it, right?
+And because, oh, you know, eight features doesn't make for good product.
+Maybe the ninth one will instead it just made for, you know,
+something that felt really complicated.
+I mean, I think a couple of things are also like part of how we're dealing with it is
+actually being more willing to do rewrites, you know, like classic,
+you know, Fred Brooks, Mythical Man Month, like you, you shouldn't rewrite software
+because all the things that were imbued and B1, you're going to mess up.
+Exactly. And the whole second system syndrome.
+And there are still a lot of truth to that.
+But one, you know, the models can help you sort of diff and basically see,
+did you miss anything that was in that first one?
+But second, it's just, it's no longer, you're not like talking about a year-long rewrite
+that might have killed the company like, you know, famous like Netscape.
+These are like days probably, especially off a given source.
+So we've actually had several initiatives, like usually pre-launch, rarely post-launch,
+but at least pre-launch, like have built the full blown thing,
+realize we've overcomplicated or made some kind of core assumption,
+and then like tore it down, done a V2, and then, and then iterate on it from there.
+So it doesn't surprise me that that's become sort of part of what you've had to do as well.
+But it doesn't feel as painful.
+You're not like, oh, the year of building this thing.
+It's like, oh, that was last week.
+And then I get to do it this week.
+And I get to cut out a lot of, a lot of what was there as well.
+I think functionality-wise, and how we're dealing with it from a product development standpoint,
+I think we are learning to launch earlier.
+And it's definitely a balance around, you know, we've grown, we have like a strong enterprise
+footprint. People have expectations about like what the initial version is,
+but not assuming that we're going to know what every connector or everything that we need to
+add to the product is ahead of launch, because people still will absolutely surprise us, right?
+We're, we have a strong contingent, we call them amp-fooders because we're
+ants that are anthropic.
+But only that only gets you so far before you need that real world contact.
+Like take co-work, for example.
+We'd been noodling on a product of that shape for a long time.
+And then once we decided, no, let's get this out.
+Let's actually, you know, build the V1 that we think solves the problem the most minimal
+way possible and get that out in 10 days was really a good push around.
+Yes, there are a hundred things that V1 should or could have had, but it didn't.
+And at the same time, it was, it was useful enough to prove something out there.
+And I'm not sure developing it for another two months, adding, you know,
+50 features would have been more useful.
+In fact, we probably would have been building in a, the indoor tree would have been getting
+built. And then the second to hit real world use, it's like,
+actually nobody wants to do that.
+They want to do this, this other piece.
+So I think that piece of that, again, there's like the intuitions of the original
+lean startup ideas are still here.
+It's just, they manifested different timescale in a different way.
+I'm really curious to hear how you think about product design and how products should work,
+because the, I've been, if anyone in every will tell you the, the, the, the phrase that I use
+the most or the word that I use the most about the software build is it has to be agent native.
+So agents have to be able to like use it as anything that an agent, a user can do in the,
+in the app, the, the agent can do.
+There's a couple other like little principles with being agent native,
+but I basically stole that from you guys.
+Like I think that Claude code is the canonical thing that taught me about how that kind of
+product can work so well where it's like, it's an agent, it can do anything on your computer
+that you can do.
+And it's customizable and flexible and extensible.
+So it's easy to start, but it can do all sorts of unexpected things that the designers didn't
+really like to think about beforehand.
+And I think that that's such a good model for a product development and AI.
+And I'm kind of curious, like, this is just sort of what I've cribbed from watching what
+you guys do and then like kind of put my own spin on, but how, how do you think about it?
+And how do you, how do you talk about making products like that?
+Yeah, that's so much in here.
+Um, and I love the agent native right up.
+Y'all did.
+It's like, to me, the canonical like exploration of this.
+So thanks for like putting that, those ideas out in a really, in a really clear way.
+So I think a few threads to pull on this.
+One is a conversation I had with somebody recently where they said, uh, you know, like,
+you all, you know, they're a non-technical person.
+They're like, you are talking about like agents, all this stuff.
+Like they're just like, actually computers just work now.
+I always wanted computers to work and they didn't work and now they work.
+And it's a sort of funny thing where if you knew the incantations to properly get on the
+command line and brew install the thing that like, he's going to do that.
+But now Claude can do it for you.
+And therefore, like the computer now feels like a tool that is alongside you.
+And I think that's that, that core insight is it's more than even just adding power and
+functionality to new software.
+It's also just unlocking the functionality that always should have been there available
+and just felt like extremely hard, um, for people.
+So that's like maybe thought number one, thought two is actually comparing our products that
+do this well versus not.
+I think Claude code does it well.
+I think Claude AI still needs to evolve a lot.
+So, um, as an example, I was watching somebody use, uh, Claude and they were in a project
+and they had built, I think an artifact or a new document.
+And they said, great, can you add this to my project knowledge?
+And Claude's like, yeah, let me tell you the steps to go add it to my project knowledge.
+It's like, no, that should just be a thing that it can do really natively.
+And so I think even in that, you see a product that was a 2024 product that has been iterated
+on and evolved a lot, but still, I don't think has been baked in from the very beginning,
+the idea that every single one of its primitives, it should have knowledge about and the ability
+to modify.
+And I think that's essential in products these days.
+I think Claude code is the 2025 vintage of that.
+And I think there's even further aspects of it.
+When you see what some of the harnesses that folks are experimenting with,
+where they can actually modify the harness itself, that starts getting to the next,
+maybe level of that where, you know, it's probably esoteric for most people,
+but even unlocking that functionality means that you don't have to, um, sit there and be like,
+Oh, I wish it did this a little bit differently.
+You know, I wish Gmail worked in the slightly different way and said just asking it to,
+and I think that that feels like the big next step.
+But, um, even within like Claude code, just teaching Claude code about Claude code was
+a really valuable experience.
+I was like, this definitely relates.
+This is not getting very circular meta, but bear with me.
+I loved your, uh, write up on agent native.
+And I was like, I want this as a skill.
+So whenever I'm prototyping something, it thinks in an agent native way.
+So I had to package it up as a skill.
+And that whole process was, you know, hey, Claude and Claude code, I, you know,
+can you create a skill for this?
+It's like, sure, I'm looking at my skill skill.
+I'm going to create a skill about it.
+I'm going to install it.
+I'm like, great.
+Is that available now or do I need to reload?
+And it said, right, I think you need to restart it.
+Let me check.
+Yep, you do.
+All right, let's go.
+And everything was, it has knowledge about itself and that unlocks so much, uh, capability in
+there as well, which maybe is like the last thread to pull on.
+I think all of these could be hour long conversations, which is.
+I think, and one of the things that we're really thinking about in labs is how do you
+imbue the software that Claude builds to be more Claude aware and even just Claude agent
+native sort of building aware so that it even thinks to build in that way to start with,
+because it still won't partially because, uh, decades of software is not that right.
+So how do you get new software to have that principle baked in?
+That's the thing I was about to ask you about.
+Like, so a, I'm super, I, I'm super honored that your youth that you read the write up
+and you're using, you made a skill for it.
+That's, that's amazing.
+And be like, yeah, you're pointing to a real problem that I found is, um, I think actually
+Claude models are the best for this.
+Like a codex model generally is not as good, um, uh, at building an agent native because
+they're, uh, models in general, unless you push them, they think like traditional engineers.
+And that's a whole different set of, you know, you want to have guardrails and tests.
+You want to make sure that there's like one path the user can go down versus we're creating
+this extensible thing that's super flexible.
+Um, so yeah, how, how are you, how do you, how do you architect your product to teach
+the models and the harness that you teach the models to think and work in this way?
+Yeah, I think there's two parts to it.
+And one is the more sort of mundane part of the second one.
+I think it's the one that's more sort of interesting and developing the first one is
+like even just having good patterns and paradigms available to the model while it builds has
+been really valuable and finding the right balance of templatized to skillified, right?
+And like what that, what that right balance is, um, but having, you know, one of the things
+that we like have now is a skill about the Claude API, which sounds super obvious, but
+even just having that is really valuable because you would sometimes find, you know,
+we'd launch a new model.
+It wasn't in the, the models sort of innate knowledge.
+And then you'd get into these really funny arguments like, no, no, you made a typo.
+It's, it's sonnet four or five.
+You're like, no, I, I know it's, no, no, no, no.
+So, um, like, um, like having that capability, having like good templatized examples of that
+and skills, I think helps.
+But then the second part is what's also interesting is that class of software is just
+a different type of test.
+Like it's much harder to sort of write an end to end functional test around an agent
+native product because part of it is that unpredictability.
+And so another idea we've been kicking around a lot in labs is like, how do you increase
+like the sort of fidelity of the verification?
+The other day I had a agent native iOS app that I was working on and I was, I was having
+Claude interact with it and Claude was ended up having a conversation with itself in like
+a chat feature in the, I was very funny watching Claude talk to Claude because it's like,
+someone's pretending to like be what humans are.
+This particular one was like a photo time I was doing about like a sort of like work journal
+of reflections and the Claude was like, yeah, my boss is really rough on me.
+Like I had a hard day.
+And then the Claude's like, oh, I'm so sorry to hear that.
+And they're just going back and forth.
+But you wouldn't have written a unit test for this.
+And you know, maybe it would have come up with some other emergent idea as well.
+So I think you just have to go much more towards, um, you know, setting up harnesses that are
+actually exercising as much of that agent native capability as possible because you
+don't exactly know what things are going to, and things are going to end up in a weird
+place where Claude's going to try to do something that you wouldn't even think it was going to
+do and it might put your app in a new state.
+So maybe circling all the way back to still like what's hard, it's like,
+having the underlying architecture still be robust to that is really important, right?
+It's like it's agent native, but it's also able to flex in a way that you might not have
+anticipated, but you've got the right primitives, right?
+I feel like that is the art and science of software design in 2026.
+That's really interesting.
+I totally agree with you.
+Yeah, you wanted to have a playground within a safe environment.
+That's the only way you can have playground is if it's safe around the edges.
+But I think initially we made the playground like way too small and constrained,
+and now the models have changed.
+And so we can open it up a lot, but we still haven't figured out exactly like,
+at least I have not figured out exactly what the lines are.
+Yeah, I think that there's so much here.
+One thing this is making me think of is I have this idea in the back of my head,
+and I'm wondering if you have a way to put this that is more succinct.
+It's like the unit of value in products right now is it's like proof of work or proof of use,
+where when someone on the team submits a PR to me, I want to see,
+not necessarily did all the test pass because I just assumed that it did, but like
+send me a loom of you using it or your agent using it so I can tell is this good or not.
+Yeah, how are you thinking about that?
+Yeah, I think there's probably like three layers to that.
+The first one was like, Claude, prove to me that you've exercised this in some way.
+You know, I've started doing that in all my promises when it's working on a future.
+I'm like, and by the end, before you PR, prove to yourself and then to me that it works as
+intended, like find the right way of doing it.
+But actually, you have to change your own way you build and scaffold them around saying,
+what is the right way to get Claude able to at least test this change succinctly,
+rather than what it likes to do. It's like, I read the code. It looks good.
+I'm like, you wrote the code. I don't trust you. So you got to really test this thing.
+And then the second one is that what you described is like, everything having some
+sort of proof around, is it working as intended? And as you intended too,
+because Claude is going to make, or any of these models is going to make a lot of decisions
+for you. And sometimes you'll have engineers on the team put up a PR and I'm like,
+oh, why did you choose to do this versus that? And many times the answer is they didn't choose.
+It was just the choice the model made. And maybe it was a reasonable choice.
+It was probably a reasonable ish choice, but it was like the optimal choice as it fit into
+the paradigm. I feel like that is the, it's not just proof of work, but it's like proof of
+thoughtfulness. Like, did you think this through? And I was talking to an engineer yesterday,
+and they were like, I was really, I knew you were going to ask me a lot of questions about this.
+So I was reviewing what Claude had done so that I wouldn't be like, I'm not sure, you know, and
+that's, I don't, I don't push on that for most PRs. But when there's one that's like, oh, I'm
+refactoring this system, and there's going to be these new primitives, like great, let's make
+sure those are good. And that you've thought through how they interrelate, because it's very
+easy to end up otherwise with sort of this sort of tower of assumptions that you're not fully aware
+of. I had literally the same experience today because I made proof, totally vibe coded. And
+it's growing really fast right now, but it's going down a lot. And so I've been spending the last
+12 hours like trying to fix it. And so we have a little swap team internally at every that like
+signed up to help me fix it. And so I had to like onboard them. And I was like,
+shit, how do I explain how this code works? And so I had to like go back and forth with
+the model a bunch to be like, okay, help me to like define these terms, help me like figure out
+how I can explain this. So I don't look like a total idiot, because like, yeah, there's,
+I understand some of it, but not all of it, definitely not enough to like, the way that I
+would use to have to know to know. And it's a whole different thing to be like,
+do I need to know that anymore? Is it like, where's the line now? It's hard to hard to tell.
+Which maybe gets us something else. And I haven't tried to articulate this to bear with me as I
+like, you know, kind of get there, which is, you know, there's products that you use that feel
+robust underneath and those ones that you use that are like, it feels like it's one wrong
+command or click away from the whole thing, either like freezing or it being slow for us at Instagram,
+like we had Instagram view, direct messaging v one, and that like, who knows, you send a message,
+it might or may not arrive to the other person, like we'd like, I wrote our own like bespoke
+real time system, it was like, you know, fell over a bunch of just, you would not trust that to
+send a message that you really needed somebody else to see, it was just a, you know, more of a
+social thing. And when we built V2, it was really important that we really hammered like, no, like
+if you send a message, we're not probably going to get to what's that level of like, you know,
+you can be in the middle of absolutely nowhere with like one bar of edge, and it will probably,
+you know, try to still go through, maybe that's not the bar, but still a bar of,
+when I load messages, it feels robust, when it's sent, it's really sent, I feel like there's like
+a little check. That's like one small example. But I think that that is a thing that we still
+need to figure out how to make, you know, feel like an essential part of shipping on anything,
+not just that, you know, anthropic, but in general, like, you've built this thing,
+does it feel like it's built on sand or does it feel robust? And the agent native part adds
+something totally even beyond that, which is, can I push it a little bit? And is that going to
+fall over? Or does it feel like, great, I've got a solid trunk. And yeah, you can push me in different
+ways. But, you know, your data is safe, and it's underneath here. And it's not just like one deploy
+away from completely falling over. So if you're, if that's, if that's the bar, which I agree,
+like, that's, that's where you definitely want to get to. How has, how have you changed
+who you hire and how your teams are structured, as the models have gotten better? Because for us,
+for example, one of our products spiral, we just hired a new GM who's like, I would say he's
+lightly technical, but he spikes super high on product and writing sense and spirals are writing
+product. And now we can like, hire someone like that where a year ago, we wouldn't have been able
+to because the coding models weren't good enough. I'm curious, like, but the downside is it's maybe
+the product won't feel quite as robust if there's not someone who's like super technical and all
+the details. So like, how do you think about who builds products right now inside of the labs team?
+And how that has changed over time and how it will change? Yeah, I love that. I think it's
+actually you get pulled in two directions, but they're both important. There's the sort of
+primitives and architectural robustness, which I think still need a sort of senior technical
+person. I was laughing with somebody that like, I thought, you know, my skills and distributed
+systems were like, not going to be useful anymore. But actually, those are the maybe some of the
+most useful skills and reasoning about that. And, you know, thinking things through, like, I had a
+long debate with Quad last week around, like, whether the system that I was building needed
+Redis or not, or could go to just Postgres. And, you know, it was a healthy debate where like,
+only because I was grounded and having used a lot of those technologies before.
+But then there's the other side of robustness, which is, have you just papered over all the
+problems with like fixes to your system prompt and additional instructions? Or have you sort of
+architected the actual like set of tools correctly? And so that the latter is as important
+and probably where this GM can be really valuable and not okay, like, I am making changes, but
+just like you wouldn't patch a sort of flakiness in your distributed system by just being like,
+well, just retry it in five seconds. I'm sure it'll work. Like also not doing the same thing with
+never ever, you know, all caps use, you know, markdown or whatever the thing that you're trying
+to patch is like, they're both actually symptoms of the same thing, which is the underlying piece,
+robust or not. And
+Claude actually, I'd say this about all the models, but I think Claude could be much better at both.
+It's like still a place that still needs a lot of human oversight on the systems part, you know,
+it's now able to debug production systems, which is really valuable, but architecting them in the
+first place, I feel like we're still benefits from somebody who's really thought these three
+things through or has experience. And on the prompting side, you know, if you give it a,
+I've seen people get into this dev loop, even internally here, like, here's the prompt, here's
+a mistake that the system made iterate on the prompt, its natural tendency is to just add
+more things to the prompts. And then eventually just get to this thing that, you know, if you
+onboarded a new employee and you gave them 100 instructions on their first day, like always
+answer and markdown, except when they'll be like, I'm just going to remember the last thing you told
+me, I'm going to like short circuit it. So then rethinking, okay, is these are these actually
+two different tools is actually two agents that each have a smaller amount of context that then
+you can break apart. So back to your original question, we're hiring for people with, you know,
+systems expertise, even within labs, which you think of as like, more zero to one prototypes,
+like it's still really valuable. Because again, that robustness matters. And also just who's going
+to be, you know, helpful in sorting through, you know, systems permissions and provisioning
+and early testing, like that stuff is still, you know, it's still hard even for cloud when it can't
+edit the permissions itself, which it can't for good reasons. And then on the on the robustness
+side, actually, we've had a lot of success pairing our product teams that are applied AI teams,
+our applied AI teams are the teams that are in the field every day helping customers iterate
+on their prompts. And we've found that we actually are very we're customer zero now for those,
+you know, efforts because we have a lot of products that are, you know, very AI powered. So
+how do we bring that expertise in here? Because that expertise does not sit with our software
+engineers today, for example, what about the in between of like, okay, it's not the underlying
+architecture, it's not the prompts like the UI and the flow, who's doing that?
+We that's a great question. Like we have found, you know, some of the people that transferred
+into labs were the folks like really were focused on polish on the website, but they were interested
+in doing something new and they bring such a different approach as well around. We had the
+prototype, it was, it looked generically nice versus Oh, this feels like it's branded and it has
+this that's that's part one part two is designers like we've had our designers move much more into
+a sort of split designer and build a role not all of them, but most of them and a lot of our,
+you know, we actually don't have a lot of full time designers on labs with the ones that we do.
+I would say our writing and contributing almost as much code as engineers on those efforts,
+because they can and again, paired correctly with the right person, we have found this almost
+sort of co-founder model for some of these labs initiatives or you have the designer who had
+the original idea maybe and they're pushing on something and then the traditional software
+engineer that's going to go and, you know, make, pave the trail so nice behind the designer to make
+sure that actually works. Okay, this I want to know about. So what, so tell me about how that
+team structure works. So you've got a design, is it actually usually a designer or is it just
+anyone that has a product idea that can kind of execute it on it in some way, paired with a real
+engineer that actually can like kind of smooth out the rough edges of the trail they're leaving?
+It sort of varies, but we found that one thing that was most important, it's sort of our gating
+factor in starting up new projects. I'm curious how similar this is to every, is having somebody
+with extreme conviction about, if not necessarily that idea, too much conviction on the exact idea
+is probably dangerous, but at least in the problem space or the question that they're asking.
+And that sort of like co-founder or founder level of, I will break through walls until this thing
+is either proven out or dead, but I want to like go either way. When we have labs bets that we've
+wound down, often in the post-mortem, we're like, nobody on this team actually really thought this
+was like the thing. They were like, yeah, this seems reasonable. Like that's the death knell for
+projects, right? So that person can be a designer and a couple of the bets it is. It can also be
+sort of a product-minded engineer. It's rarely a pure PM. We actually only have one currently,
+one PM for all of labs. We're hiring more and they're sort of playing sort of a wide role,
+but yeah, a designer or like a product-oriented founder. And then what we look for is, well,
+what skills do we need to complement with that? So because we're doing, it's part of our labs
+process, it's actually evaluating every project every two weeks and deciding whether we double
+down or whether we sort of release those folks back into the broader labs pool. At any given point,
+there is probably somebody who can be pulled onto the project that has that infrastructural
+expertise or has worked with that particular internal system or has a lot of deep-prompting
+expertise to sort of flow in and out. So I think that's also where the sort of incubator style
+space helps because nobody's fixed on a project forever. That's really interesting. Yeah, we do
+it slightly different. There's some overlaps, but we do have a slightly different structure where
+yeah, we have GMs or they start as entrepreneurs and residents and they become general managers
+when they find a product that they want to like work on. And each product just has one person,
+like one person that does everything full stack. So design, engineering, marketing,
+all that kind of stuff, at least all the basics of that. The shape of that GM used to be like
+super technical founder background and now I think has shifted towards at least some
+light technical, but like I honestly just care that you can use Clot or Codex or whatever well
+and really good product sense, really good taste for the the subject area or the thing
+that you're trying to build and evidence that you can build with AI. And then what we have
+is a shared resource layer that sort of works a little bit like an agency where we have designers
+and we have growth marketers and we have ops people that you can pull in and out for various
+initiatives and that seems to work pretty well. So it's like we manage all the internal agencies
+and then each GM is out on the edge and they pull in resources as they need it for different
+projects. Yeah, but sound similarly like you need somebody for whom that is like the thing and they
+are not going to sleep until it is fully working. Yes, exactly. Like and I've been I've been thinking
+about okay, when would you hire someone else to work on a product or when would you add someone
+else to work on a product? And it's like there's some point at which you can't hold the entire
+thing in your head, even if you're the one pushing it forward, you can't hold the entire thing in
+your head. And that point used to be much smaller. Now it's much bigger. But there's a certain point
+at which like even a small feature turns itself into its own product, you know, when you when you
+first make the messaging feature inside of Instagram, it's like, yeah, I can do that in
+like a week or whatever. But at some point, that's its own product, it almost needs its own team.
+And that I think that line is getting or the number of things you can do with one person is
+getting bigger, but it still exists somewhere. But I haven't quite figured out like how to
+how to manage that how to tell. No, I love that because there's actually, I think there's the
+two parts to that, which is when the idea is still enough to hold into your own head or an
+individual person's head, adding more people actually slows the team down. And that's like a
+non obvious finding that we found on labs is scaling the teams too quickly actually is a
+net negative because they end up spending all this time on coordination, like, oh, you were,
+I was going to take, oh, but my cloud could do that. And it just ends up in this sort of piece.
+And you also have all those alignment conversations, like it was important in Instagram, there was
+just two of us, like it was hard enough to line the two of us, like, and go like get two people on
+the same page, right? The second startup I did artifact, you know, Kevin and I were doing that
+alone for the first few months, but then we hired a team that was about eight people. It was really
+hard because, you know, we hadn't had product market fit yet. And so we were still iterating.
+And then you had it up and these things were trying to zoom with eight people talking about
+what we're doing next. And you really just want to be able to sit in a room and hash it out. So I
+find with these labs initiatives, there's some there's some similar sort of aspect of play,
+which is you don't want to pre scale the team to even if the idea is exciting, because then you
+just end up in this sort of like meta coordination game. But I like your framing of there is some
+point where either, you know, two people really will help go on it together. And there's enough
+sort of context and scope where they can hold some other complex piece in their head. And then
+there's also the if somebody's been spending on the same idea for two, four weeks,
+sometimes injecting some other thinking and that urgency can help too.
+Yeah, I think it's especially important in to keep it small in AI, because one of the things
+that we deal with all the time, which I'm sure you see to you is every three to six months,
+you're, you have to throw out like half your product. And that's really hard
+to do if you have to coordinate with a lot of people. But if it's one GM who realizes, oh,
+shit, yeah, I got to just like throw out half of this because the models are so much better,
+it just makes it much easier to, to like pivot in that way. Is that, do you see that? And like,
+how do you deal with that? Like, how do you think about, yes, I know in three months,
+the code maybe, or even the whole feature set, I'm going to have to like really rethink about
+like it feels like it changes a lot and how you think about software.
+Yeah, and being willing to delete code, I think that's something that cloud code team has done
+really well as they have sort of deleting features as a sort of imperative of people on the team.
+Like if this is not working, let's go and ship that, you know, and it's often when
+you've created something else that even if it doesn't entirely supersede, it does enough of what
+that other aspect does that actually makes sense to deprecate and then remove that first one.
+It does get harder as we get more and more enterprise focused, even with these tools,
+because they come to depend on it. I don't ever forget we,
+one of the things I did maybe six months into when I was still a chief product officer was we
+did a big sort of redesign of cloud AI and we were so proud and we shipped it and we got a
+bunch of kudos and then we got this really angry email for some days like, I just recorded 20 hours
+of enablement content for my company to do for cloud enterprise and I have to like redo all of it
+and we're like, okay, like you're playing at a different release cadence. And of course like
+shipping twice a year at one of our conferences is not an option. So we are going to keep moving
+quickly, but then we've since like learned to maybe moderate how we roll it out to the enterprise
+side a little bit more. But yeah, I think the unshipping piece, then you end up with people
+who have built, I'll use an example. So there's a feature in cloud AI called styles is not
+widely used, but the people who use it use it a lot. And we've talked at different points like,
+yeah, the styles still make sense in the product, you know, there's other ways of accomplishing
+the same thing, there's custom instructions and projects now, there's skills now, right? There's
+so many other ways of accomplishing that. And I don't know how long styles will end up in the
+product, but I know that the last time we talked about removing it ended up being really load
+bearing for a few companies like entire use cases, like, oh, we have our house style that the CEO
+personally authored and gives to every employee. And that's how they operate. And so finding ways
+of doing that is also really interesting. I would hope that in the longer and what we can actually
+do is come up with a system of plugins and skills such that they no longer have to live in the core
+product. Because I think that is always the hardest to delete something that is the core thing that
+you're shipping to everybody. If you don't have the story around, great, you still like that feature,
+awesome, like here's how you can keep using it forever in your own and keep iterating on it and
+make it your own, but it doesn't have to add complexity to every future person that's adding,
+that's signing up for the first time. I'm curious for for labs. And then also maybe just in general,
+with your thoughts for startup founders, your enterprise point just it brings up something
+that I've been thinking about a lot, which is if you are selling to enterprise right now in AI,
+even if the product you have right now is modern, it will be quite outdated quite quickly.
+But your customers were going to want the outdated version. But as a startup, that's like a little
+bit that feels pretty risky. Because yeah, you're just going to see, I guess you're susceptible
+to disruption if you are optimizing for what someone at a gigantic public company will buy
+right now. And I think there's a lot of startups in that category where they maybe started two
+or three years ago, they have a certain tech stack, they have a certain way of thinking about
+here's how we do AI, and then the models are so different. But their customer contracts are for
+this like sort of out, it's like, you know, looking at looking at co-pilot or whatever,
+it's that's the sort of vibe that happens. Like, how do you think, how do you think about that
+yourself and inside of Anthropic? And then how do you think founders should think about that?
+Yeah, no, it's such a good question, especially because then a wave will come like being more
+agent native, for example. And can you adopt it within your existing paradigm? Does it require
+you to throw everything out? And are you just stuck in that like, oh, we kind of adopted it,
+we kind of bolted it back on. I think a couple things for us, what we've started doing is
+basically treating like this train's going to keep moving and we'll provide enterprise toggles
+along the way. But the core of it will continue to evolve. And that's sort of the, the bet and
+understanding you're taking working with us. And I think that's been well received because I think
+companies have also seen that, you know, things are moving so quickly that the only way they even
+get comfortable with a year long commitment, for example, is to believe that it will continue to
+evolve along the way. But then we'll provide, you know, co-work is a great example where,
+you know, from day one, there was like a way to turn it off for your employees if you didn't
+want it, for example. And that's, I think, a reasonably good paradigm. But the other one is,
+just as we were talking earlier, like you can actually rethink and sort of rewrite a lot of the
+stack is, I think companies should be way more willing to do that. And it, everything is getting
+compressed, right? In previous cycles, it was the kind of idea of like having to fire some of your
+customers who might have been, you know, really into your product for a different reason than
+where you're going sooner. That was on a multi-year kind of time range thing where it was like,
+yes, last year's product versus not three months ago's product seems crazy, but I actually think
+that's the kind of way you have to think about it, which is you have to be willing to put out the
+V3 or the V4 that is a, you know, big rethink of how the existing piece worked. And then maybe
+have a transition period and Claude can help probably host both for a little while before
+it cuts over, but then also be willing to cut over and say like, yes, this is how we think the
+future of this piece of knowledge work or this, you know, AI-powered manufacturing is going to be,
+we got to like keep it moving or else to your point, you're just going to, you're either going to
+get replaced by the next company that then rethinks it from scratch or yourself replacing it
+yourself. And again, it's just the same old story, but now compressed to months.
+What's your take on Open Claw?
+It has the flavor of something else that I, or just the thing I really like, seeing when
+you get people to see something that was already possible, but it's now in a package where people
+can actually try it out. And there's some intuition, you know, around how to build on top of that.
+Like you started seeing that with, you could already use these models to write code, but it
+kind of took like some of these breakout, like low code, you know, the replets and loveables and
+VZero's of the world to like kind of put that in there. And it's kind of the, like almost the purest
+expression of the, just give the model tools and like let it kind of go forward and do it and then
+like go forward and build it. So like, cool, interesting moment for people to realize both
+the like potential, but also pitfalls of this of like, Oh, it did this thing. I didn't mean it to,
+or, you know, my funniest one was my friend was like, I think my wife is jealous of my Open Claw.
+And like, I'm talking too much to it. And it's like, people start developing like deeper,
+sort of like very personal relationships by just having a lot of context in these things,
+in the access to all these different tools. I think there's the open question of, how do you
+then make it easy? And it actually goes back to our conversation around like, what, where do you
+draw that like boundary around the way you like cloud operate, right? If V1 was, Hey, like, these
+are the three tools you can use only use these tools ever. And then most people's interaction
+with those systems was, Hey, can you do this? And, you know, whatever back and being like,
+No, sorry, like, can I do it yourself to like Open Claw, which is like pretty like,
+the aperture is like wider than I can see. Oh my God, I called me to keep my emails and I didn't
+even know it could do that. Yeah, exactly. And it's emerging and it's amazing. And I think,
+like probably the most interesting product question, I won't say for all of 2026, because
+who knows where we'll be in September, but let's call it between now and like the end of August
+is going to be like, what product shape exists between that and, you know, where we are in
+most products these days, which is, you know, you can call them CPs, but they're gated and they're
+asked for permissions for good reasons. That is still a useful product without being a, you know,
+kind of YOLO product. And I think that, you know, we're thinking about that question. I'm sure
+the other labs are as well. I'm sure there's a lot of startups thinking about that as well.
+I think NVIDIA put out something that was like, they're safe, open, everybody's going after this
+question. And I think it's going to be about figuring out what is, what is that, either shift
+the paradigm completely, so you can be that open, but with a lot of safeguards, that would be one
+approach, or figure out some boundary to draw in which it's still powerful and it's still useful,
+but it's not, you know, likely to email every single one of your contacts and, you know, go haywire.
+Yeah, I think the other interesting part about it is, like you said, the personal nature of it.
+And I know, you know, people have personal relationships with Claude, but there's this
+weird thing where if I watch someone else using Claude, I'm like, I feel like I like thought a
+stripper liked me or something, you know, it's like, Claude thinks you're smart too, or whatever,
+you know, like, and, and so, and there's this thing that happens when you have a Claude
+that like my clause R2C2, my girlfriend's clause called Shelly. And there's this thing that happens
+where it feels like it's mine, like it's really mine, it has its own name, it has a personality
+that sort of like mirrors me in this way that Claude feels like it knows me, and I like Claude,
+but it's not mine. How do you think about that? Yeah, I mean, I was having this conversation with
+somebody this week around, like, is the right pattern, sort of single point of contact, like,
+named, you know, version of, you know, of that, or is it the sort of team of agents that you're
+talking to? I think there's a lot to the single person that is maybe the coordinator or the
+delegator, and then at that, naturally, because it becomes the, the sort of agent you interact
+with the most, you want to imbue it with a name and like a bit more personality, is it reflecting
+your, sometimes your personality in the case of, you know, like, all of a sudden, every cliche came
+out, it was like, you know, the, you know, the cue or the money penny, or like, you know, whatever
+the, or the, you know, Hal, or whatever these different sort of, you know, sci-fi characters,
+but I think you do build that sort of, sort of trust and knowledge. I think there's also that
+sort of, like, Ikea effect of, like, currently open clause, like, still pretty hard to set up,
+so the fact that you went through all of that, and it works, you're like, I did that thing, like,
+I, I, I, I, I birthed, you know, Shelley, for example, and now we can, you know, interact with
+them as well. But I think that paradigm is really powerful, like, the, I think moving away, like,
+even within my Claude Code usage now, one of the things I have, like, strongly prompted in there is,
+like, don't do very much work yourself, like, delegate it to subagents, and the reason I like
+that is because it means most of the time, the sort of run loop is available for you to talk to,
+and I think Open Claw and Pi have, like, a similar architecture of keep the run loop open, and I
+think that actually makes it feel much more like somebody that you are talking to versus, like,
+a tool that you are delegating to, and occasionally gets blocked for five minutes because it's doing
+some really complex task. Yeah. I, I, I totally agree, and I've had similar debates, because we're
+also building our, like, everyone, we're building our own little, like, Open Claw one-click Slack
+implementation to see if we can, we can do when that feels like ours. And we've had a lot of those
+debates about, do you want one agent, do you want many? And one of the patterns that we found, which
+is kind of cool, is, so I have an agent, I use the agent for stuff that I do, and then people watch
+me use the agent for that, and they know what I'm good at, and they're, and if I'm using the agent
+for that stuff, they're going to trust it because they trust me. And it's modified itself in response
+to me. So like, I started transferring my trust to it, and then people in the organization start
+using it for that. And so you get like this almost shadow org chart, where when everyone,
+everyone has a claw, their claw becomes known for and used for the thing that they're specialized
+that that per their owner is specialized that in New York. Yeah. I mean, that, that makes a lot of
+sense too. And you could think about, you know, there's a lot of interesting research questions,
+I think, around that, you know, I think people are experiencing visually for the first time around
+privacy. And like, what my agent knows about me versus what it discloses to other people,
+but I think there's the positive version of that, which is all the things that it has learned from
+all your interactions and how it actually brings it to bear on other problems versus the generic,
+like, yes, it's just like everybody else's agent, except, you know, it has a name that's attached
+to Dan and it has like maybe some of Dan's, you know, access below the hood. Yeah. Well, Mike,
+we're out of time. This was a pleasure. I learned a lot. If people want to follow you or your work,
+where can they find you? I think probably easiest is Mikey K on X. Yeah. Thanks for joining Mike.
+Great to see you, Dan.
+So, do yourself a favor, hit like, smash subscribe and strap in for the ride of your life. And now,
+without any further ado, let me just say, Dan, I'm absolutely hopelessly in love with you.
