@@ -1,869 +1,1115 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""check_note.py — 按 WORKFLOW.md 核对笔记：格式、切分、覆盖、压缩比、锚点。
+"""按 WORKFLOW.md 审计讲座笔记，并为各步骤准备输入。
 
-面向模型运行：每条问题都带一句 `→` 修复指令，说明这一条该怎么处置。
-
-用法:
-    python3 check_note.py <笔记.md> [<笔记.md> ...]
-    python3 check_note.py <笔记.md> --stage ledger    # 细切建账后的账本审计
-    python3 check_note.py <笔记.md> <原文.txt>        # 显式指定原文
-    python3 check_note.py <笔记.md> --json            # 机器可读
-    python3 check_note.py --baseline <好笔记.md ...>  # 回算指标基底，供人工修订常数
-    python3 check_note.py --rebreak <raw.txt>         # 校验 raw 的改行编辑（对 git 基线）
-    python3 check_note.py --rebreak <新版.txt> <原版.txt>
-
-原文缺省时在 <笔记目录>/raw/ 下自动匹配（同名 → 去 _vN 后缀同名 → 首段编号唯一匹配）。
-
-两个阶段
---------
-- `--stage ledger`：细切建账完成、答案未写时跑。查格式、切分、覆盖，以及深压缩 Q
-  是否已申报锚点；不核算压缩比，不要求答案正文。
-- 默认（full）：写作完成后跑。在 ledger 的基础上加压缩执行与锚点兑现。
-
-五项检查
---------
-1. 格式   账本行的语法。每条 `### **Q**:` 之下必须紧跟声明行，合法写法只有一种：
-
-              *行 8–9 · 压缩至约 70%*
-
-          只有三个数字可变，其余逐字符固定——连接号是 – (U+2013)，间隔号是 · (U+00B7)，
-          空格位置照抄。多区间（`行 15–17、23–24`）、单行（`行 238`）、半角连字符 `-`
-          一律报 ERROR。行范围还须正序、落在原文行数内；full 阶段答案不得为空。
-          锚点行（深压缩 Q 必须，其余可选）紧跟声明行的下一行：
-
-              *锚点：路易斯·萨斯、1936年、《家庭情结》*
-
-          条目以 、 分隔，按笔记正文中将出现的写法书写。
-2. 切分   单 Q 覆盖有效字数超过 Q_CAP → ERROR（压缩判断在这个尺寸上不可靠，拆条）；
-          全文有效字 ÷ Q 数落在 DENSITY_BAND 之外 → WARN（切得过碎或漏切）。
-3. 覆盖   原文每一行要么被某条 Q 的行范围覆盖，要么在头部"已舍弃内容"行登记。两样都
-          没有 = 静默丢弃，报 ERROR。纯噪音行、实质字数 ≤30 的碎片自动豁免。
-          头部登记的行号只认 `行 X` 与 `行 X–Y`，每个区间自带 `行` 前缀。
-4. 压缩比 实际压缩比 = 答案字数 ÷ 该行范围剔除噪音后的原文字数。与声明值的偏差非对称
-          处置：负偏（压得比声明狠，细节丢失方向）超 DEV_NEG → ERROR 打回；正偏超
-          DEV_POS → WARN，单条不打回，总量由压缩带把关；声明 ≥HI_TIER 的高保留档负偏
-          ≥HI_TIER_NEG → WARN。全文实际压缩比落在 TOTAL_BAND 之外 → ERROR，打回复评
-          预算分配。
-5. 锚点   声明 <ANCHOR_TIER 的深压缩 Q 必须申报锚点（ANCHOR_MIN–ANCHOR_MAX 条）；
-          full 阶段逐条核对申报的锚点是否出现在对应答案中，缺失 → ERROR。
-
-改行校验（--rebreak）
---------------------
-细切时话题断在 raw 一行中间的，允许直接在 raw 的断点处插入换行。改行只许动换行，
-不许增删改任何其他字符——`--rebreak` 比对当前 raw 与基线版本（缺省取 git HEAD 已提交
-版本，也可显式传入原版文件），两者去除全部空白后必须逐字节相同，否则 FAIL 并指出
-第一处分歧。行数减少（有行被合并）时报 WARN：原有行号整体前移，须重核对已写的行范围。
-
-计字口径
---------
-- 噪音行 = 转写工具插入的讲话人标号 / 时间戳行（`2` / `2号讲话人00:00:12` / `发言人2 02:31:23`），
-  仅据行首形态识别，从原文字数中剔除。应和、口水话等语义噪音不由脚本判断，一律保留交给模型。
-- 一律按非空白字符计。答案不计入：`>` 开头的行（EX 区块等用户手补内容）、`概念：` 行、
-  声明行与锚点行、markdown 记号（`**`、列表符号、`[[链接]]`）。
-
-指标基底
---------
-文件头部常数区的阈值取自已提交笔记的实测分布。语料增长后用 `--baseline` 对全部已提交
-好笔记回算，人工确认后修订常数与 WORKFLOW 中的对应描述，不自动更新。
-
-退出码: 0 = PASS（可含 WARN）；1 = 存在 ERROR；2 = 用法或文件错误。
+子命令：
+  check    自动判断笔记所处步骤，累计审计，给出下一步
+  pack     输出带行号的 raw 切片 / 写作包 / 核验包
+  verify   用全新上下文（claude -p）逐条核验答案，结果写回笔记
+  show     人工复核：对照某条 Q 的 raw 与答案；或反查 raw 某行归属
+  strip    删除已处置的核验标记
+  links    检查 _concepts 与笔记模块的双向链接
+  rebreak  校验 raw 改行只改变了空白
 """
+from __future__ import annotations
 
 import argparse
 import json
 import re
 import subprocess
 import sys
+import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from itertools import accumulate, pairwise
 from pathlib import Path
 
-# ── 指标基底（取自已提交笔记的实测分布，--baseline 回算后人工修订） ──────
-TOTAL_BAND = (50, 70)  # 全文实际压缩比带（%）：低于 → 整体取舍过狠；高于 → 接近转述
-DENSITY_BAND = (600, 900)   # 全文有效字 ÷ Q 数
-Q_CAP = 1500           # 单 Q 覆盖有效字上限，超出即拆
-DEV_NEG = 15           # 负偏差（压得比声明狠）超此值 → 打回
-DEV_POS = 15           # 正偏差（写得比声明多）超此值 → WARN，总量由 TOTAL_BAND 把关
-ANCHOR_TIER = 65       # 声明低于此值的 Q 属深压缩，必须申报锚点
-ANCHOR_MIN, ANCHOR_MAX = 3, 8
+ROOT = Path(__file__).resolve().parent
+CFG = tomllib.loads((ROOT / 'thresholds.toml').read_text(encoding='utf-8'))
+TIERS = {k: tuple(v) for k, v in CFG['tiers'].items()}
+FORMS = {k: tuple(v) for k, v in CFG['forms'].items()}
+HEADER_FIELDS = ['来源', '对谈人', '已舍弃内容', '内容存疑', '转写错误']
+CONCEPT_ORDER = ['人物', '学派与方法', '核心概念', '精神分析']
+LABELS = {'书目': 1, '脉络': 2, '概念': 3, '话题': 4}
+STAGES = ['source', 'modules', 'ledger', 'draft', 'verify', 'concepts', 'left', 'complete']
+STAGE_NAMES = {'source': '步骤 0 来源底稿', 'modules': '步骤 1 粗切', 'ledger': '步骤 2 建账',
+               'draft': '步骤 3 提炼', 'verify': '步骤 4 核验', 'concepts': '步骤 5 概念链接',
+               'left': "步骤 6 What's Left", 'complete': '完成'}
 
-# ── 其余阈值 ────────────────────────────────────────────────────────────
-HI_TIER = 65           # 声明 ≥65% 即高保留档，等于承诺接近全文保留
-HI_TIER_NEG = 10       # 高保留档负偏差达此值 → WARN
-GAP_BUDGET = 30        # 未覆盖区间实质字数 ≤ 此值 → 自动豁免
-OVERLAP_OK = 1         # 相邻 Q 允许共享的边界行数（原文一行是长段落，话题常在行中转折）
-SYS_MEAN_DEV = -4      # 全文平均偏差低于此值，且多数条目偏狠 → 系统性偏压 WARN
-SYS_NEG_FRAC = 0.75
-SYS_MIN_Q = 10         # 条目太少时不判系统性倾向
-SYS_NOTABLE = 3        # |偏差| 达此值才算"有倾向"，据此统计负偏占比
-
-CHECKS = ('格式', '切分', '覆盖', '压缩比', '锚点')
-
-# ── 词法 ────────────────────────────────────────────────────────────────
-DASH = r'[–—\-~]'
-Q_RE = re.compile(r'^###\s*\*\*Q\*\*\s*[:：]\s*(.*)$')
-
-# 声明行只有一种合法写法：`*行 8–9 · 压缩至约 70%*`，只有三个数字可变。
-META_RE = re.compile(r'^\*行 (\d+)–(\d+) · 压缩至约 (\d+)%\*$')
-# 长得像声明行的：用来认出位置不对或写坏了的声明行，不参与解析。
-META_SHAPE_RE = re.compile(r'^\*行.*%\*$')
-META_SPEC = '*行 X–Y · 压缩至约 Z%*'
-
-# 锚点行：紧跟声明行的下一行，条目以 、 分隔。
-ANCHOR_RE = re.compile(r'^\*锚点[：:]\s*(.*?)\s*\*$')
-ANCHOR_SHAPE_RE = re.compile(r'^\*锚点')
-ANCHOR_SPEC = '*锚点：条目1、条目2、条目3*'
-
-HEADING_RE = re.compile(r'^##\s+')
-CONCEPT_RE = re.compile(r'^概念\s*[:：]')
-RULE_RE = re.compile(r'^\s*([-*_])\1{2,}\s*$')
-
-# 噪音行：转写插入的讲话人标号 / 时间戳，本身不含讲解内容。
-NOISE_RE = re.compile(r'^\s*\d+\s*$'          # 单独一行的讲话人编号，如 `2`
-                      r'|^\s*\d+号讲话人'      # `2号讲话人00:00:12`
-                      r'|^\s*发言人\s*\d+')    # `发言人2   02:31:23`
-
-# 头部"已舍弃内容"行里的行号：每个区间都要自带 `行` 前缀，写成 `行 1–7`、`行 427`。
-DISCARD_RE = re.compile(rf'行\s*(\d+)(?:\s*{DASH}\s*(\d+))?')
-# `行 250–261、427` 这种省略写法不予支持：427 到底是行号还是别的数，脚本无从判断。
-DISCARD_ABBR_RE = re.compile(
-    rf'行\s*\d+(?:\s*{DASH}\s*\d+)?((?:\s*[、,，]\s*\d+(?:\s*{DASH}\s*\d+)?)+)')
+NOISE_RE = re.compile(r'^\s*(?:\d+|\d+号讲话人.*|发言人\s*\d+.*|\d{1,2}:\d{2}(?::\d{2})?)\s*$')
+Q_RE = re.compile(r'^###\s+\*\*Q\*\*:(.*)$')
+META_RE = re.compile(r'^\*行 (\d+)–(\d+) · (保留|标准|精简)\*$')
+LEGACY_META_RE = re.compile(r'^\*行 (\d+)–(\d+) · 压缩至约 (\d+)%\*$')
+KEY_RE = re.compile(r'^\*(?:关键词|锚点)：(.+)\*$')
+MODULE_RE = re.compile(r'^##\s+(模块[^：:]+[：:].*)$')
+MODULE_RANGE_RE = re.compile(r'^\*模块范围：行 (\d+)–(\d+)\*$')
+CONCEPT_RE = re.compile(r'^概念：\s*(.*)$')
+L_RE = re.compile(r"^##\s+L: What's Left\s*$")
+VERIFY_RE = re.compile(r'^<!--\s*核验：\s*(\S+?)\s*(-->)?\s*$')
+FORM_RE = re.compile(r'形式：(' + '|'.join(FORMS) + ')')
+DISCARD_RE = re.compile(r'行\s*(\d+)(?:\s*–\s*(\d+))?')
+LINK_RE = re.compile(r'^\[\[([^#\]|]+)(?:#([^\]|]+))?(?:\|[^\]]+)?\]\]$')
+ANNOT_RE = re.compile(r'（[^（）]*(?:转写错误|内容存疑)：[^）]*）')
+STOPWORDS = set('''the and that this with have from they what your about there their would which when were been
+will just like know think yeah okay right going really because them then than also some very more into could
+should here where those these only even much other well actually something people thing things kind sort mean
+said says want time does doing make made being over such most many hello thank thanks'''.split())
 
 
-def nchars(s):
-    """非空白字符数。全文计字一律走这个口径。"""
-    return len(re.sub(r'\s', '', s))
-
-
-def clean_text(line):
-    """剔除 markdown 记号后的正文文本。答案计字与锚点匹配共用一个口径。
-
-    记号本身不是内容，`**术语**` 与 `术语` 应当算同样的字数，否则加粗越多压缩比越虚高。
-    """
-    if RULE_RE.match(line):
-        return ''
-    s = re.sub(r'^\s*(?:[-+*]|\d+[.)])\s+', '', line)     # 列表符号
-    s = re.sub(r'\[\[[^\]|]*\|([^\]]*)\]\]', r'\1', s)    # [[路径|别名]] → 别名
-    s = re.sub(r'\[\[([^\]]*)\]\]', r'\1', s)             # [[概念]] → 概念
-    s = re.sub(r'[*_`~#]', '', s)                         # 强调 / 代码 / 标题记号
-    return s
-
-
-def answer_chars(line):
-    return nchars(clean_text(line))
-
-
-def norm_match(s):
-    """锚点匹配的归一化：小写、内部空白折叠。"""
-    return re.sub(r'\s+', ' ', s).strip().lower()
-
-
-# ── 数据模型 ────────────────────────────────────────────────────────────
 @dataclass
 class Issue:
-    """一条待处置的问题。fix 是给模型的修复指令，报告里以 `→` 打印。"""
-    level: str            # ERROR | WARN
-    check: str            # CHECKS 之一
+    level: str
+    check: str
     msg: str
     fix: str = ''
-    line: int = 0         # 笔记行号；0 表示不指向具体行
+    line: int = 0
 
 
 @dataclass
 class Entry:
-    """一条 Q 及其账本记录（声明行 + 可选的锚点行）。
-
-    lo/hi/decl 为 None 表示这条 Q 不参与核算——声明行不合法，或行范围经校验后被判废。
-    判废的写法就是把 lo/hi 清成 None，所以"能不能算"只由 lo 一个字段说了算。
-    anchors 为 None 表示未申报锚点行。
-    """
+    idx: int
     q: str
     note_line: int
-    lo: int = None
-    hi: int = None
-    decl: int = None
-    ans: int = 0
-    anchors: list = None
-    body: list = field(default_factory=list)   # 清洗后的正文行，供锚点匹配
-
-    @property
-    def label(self):
-        return self.q[:26]
+    module: str = ''
+    lo: int | None = None
+    hi: int | None = None
+    tier: str | None = None
+    legacy_pct: int | None = None
+    keywords: list[str] = field(default_factory=list)
+    meta_line: int = 0
+    key_line: int = 0
+    answer: list[str] = field(default_factory=list)
+    verify: dict | None = None
 
     @property
     def usable(self):
-        return self.lo is not None
+        return self.lo is not None and self.hi is not None
 
-
-class Source:
-    """原文，附带噪音行标记与前缀和，供 O(1) 查询任意行区间的有效字数。"""
-
-    def __init__(self, path):
-        self.path = path
-        self.lines = path.read_text(encoding='utf-8').splitlines()
-        self.n = len(self.lines)
-        self.noise = {i for i, l in enumerate(self.lines, 1) if NOISE_RE.match(l)}
-        raw = [nchars(l) for l in self.lines]
-        self._raw = [0] + list(accumulate(raw))
-        self._noi = [0] + list(accumulate(
-            c if i in self.noise else 0 for i, c in enumerate(raw, 1)))
-        self.raw_chars = self._raw[self.n]       # 全文非空白字
-        self.noise_chars = self._noi[self.n]     # 其中噪音行占掉的字
-
-    def chars(self, lo=1, hi=None):
-        """行区间 [lo, hi] 剔除噪音行后的有效字数。
-
-        压缩比的分母、覆盖审计的"实质字数"、切分的尺寸都走这一个口径。
-        """
-        hi = self.n if hi is None else hi
-        return ((self._raw[hi] - self._raw[lo - 1])
-                - (self._noi[hi] - self._noi[lo - 1]))
+    @property
+    def answered(self):
+        return any(chars(x) for x in self.answer)
 
 
 @dataclass
 class Note:
     path: Path
-    entries: list
-    discards: list                    # [(起, 止), ...]
-    has_discard_line: bool
-    issues: list = field(default_factory=list)   # 解析期发现的格式问题
+    lines: list[str]
+    entries: list[Entry]
+    modules: list[dict]
+    discards: list[tuple[int, int]]
+    issues: list[Issue] = field(default_factory=list)
 
-
-# ── 解析 ────────────────────────────────────────────────────────────────
-def parse_discards(lines):
-    """从头部 `> …已舍弃内容…` 行抽出登记的行号区间。
-
-    只认 `行 X` 与 `行 X–Y`：每个区间必须自带 `行` 前缀。承前省略的写法报 ERROR——
-    省略号后的数字脱离了 `行` 标记，脚本没有把握它是行号，不能替作者猜。
-
-    返回 (区间列表, 是否找到该行, 格式问题)。
-    """
-    for idx, s in enumerate(lines, 1):
-        if s.lstrip().startswith('>') and '已舍弃内容' in s:
-            issues = []
-            for abbr in DISCARD_ABBR_RE.findall(s):
-                nums = re.sub(r'^\s*[、,，]\s*', '', abbr).strip()
-                issues.append(Issue('ERROR', '格式',
-                                    f'"已舍弃内容"里的「{nums}」承前省略了 `行` 前缀，不予解析',
-                                    f'每个区间都写全前缀，如 `行 250–261、行 427`', idx))
-            ranges = [(int(a), int(b) if b else int(a)) for a, b in DISCARD_RE.findall(s)]
-            return ranges, True, issues
-    return [], False, []
-
-
-def parse_note(path, require_answers=True):
-    """顺序扫描笔记，抽出 Q 条目与头部舍弃登记，记录语法层面的格式问题。
-
-    状态机：读到 `### **Q**:` 进入 want_meta，期待紧跟的声明行；拿到声明行后进入
-    want_anchor，下一非空行若是锚点行则收进账本；随后进入 body，把正文累加为答案，
-    直到下一个 `##` 标题或 `概念：` 行收尾。
-
-    require_answers=False（账本审计阶段）时不要求答案正文。
-    """
-    lines = path.read_text(encoding='utf-8').splitlines()
-    entries, issues = [], []
-    cur = state = None
-
-    def bad_meta(entry, found, line):
-        """声明行不合法。不区分是缺失、写坏还是多区间——合法只有一种，其余都是这一条错。"""
-        issues.append(Issue('ERROR', '格式',
-                            f'Q「{entry.label}」声明行不合法，{found}',
-                            f'唯一合法写法是 `{META_SPEC}`，只有 X / Y / Z 三个数字可变', line))
-
-    def close():
-        nonlocal cur, state
-        if cur is None:
-            return
-        if state == 'want_meta':
-            bad_meta(cur, '该 Q 下没有声明行', cur.note_line)
-        elif require_answers and cur.ans == 0:
-            issues.append(Issue('ERROR', '格式', f'Q「{cur.label}」没有答案正文',
-                                '按声明的压缩比写出答案，或删掉这条 Q', cur.note_line))
-        entries.append(cur)
-        cur = state = None
-
-    for idx, s in enumerate(lines, 1):
-        stripped = s.strip()
-
-        mq = Q_RE.match(s)
-        if mq:
-            close()
-            cur, state = Entry(q=mq.group(1).strip(), note_line=idx), 'want_meta'
-            continue
-
-        if state == 'want_meta':
-            if not stripped:
-                continue
-            m = META_RE.match(stripped)
+    def header(self, name):
+        for s in self.lines:
+            m = re.match(r'^>\s*' + re.escape(name) + r'：\s*(.*)$', s)
             if m:
-                cur.lo, cur.hi, cur.decl = (int(g) for g in m.groups())
-                state = 'want_anchor'
-            else:
-                bad_meta(cur, f'实际是: {stripped[:48]}', idx)
-                if not META_SHAPE_RE.match(stripped):
-                    cur.ans += answer_chars(s)   # 压根没写声明行，这行是正文
-                    cur.body.append(clean_text(s))
-                state = 'body'
-            continue
+                return m.group(1).strip()
+        return None
 
-        if state == 'want_anchor':
-            if not stripped:
-                continue
-            ma = ANCHOR_RE.match(stripped)
-            if ma:
-                items = [t.strip() for t in re.split(r'[、,，]', ma.group(1))]
-                cur.anchors = [t for t in items if t]
-                if not cur.anchors or len(cur.anchors) != len(items):
-                    issues.append(Issue('ERROR', '格式',
-                                        f'Q「{cur.label}」锚点行含空条目或没有条目',
-                                        f'按 `{ANCHOR_SPEC}` 用 、 分隔，逐条写实', idx))
-                state = 'body'
-                continue
-            state = 'body'   # 这条 Q 没有锚点行，本行按正文处理（落到下方分支）
-
-        # `##` 标题与 `概念：` 行为当前 Q 收尾，它们本身不是答案；close() 会把 state
-        # 清掉，所以下面的正文分支自然落空。
-        if state == 'body' and (HEADING_RE.match(s) or CONCEPT_RE.match(stripped)):
-            close()
-
-        if META_SHAPE_RE.match(stripped):
-            issues.append(Issue('ERROR', '格式', '游离的声明行（上方没有紧邻的 Q 标题）',
-                                '移到所属 Q 标题正下方，或删除', idx))
-        elif ANCHOR_SHAPE_RE.match(stripped):
-            issues.append(Issue('ERROR', '格式', '锚点行写法不合法或位置不对',
-                                f'唯一合法写法是 `{ANCHOR_SPEC}`，且只能紧跟声明行的下一行', idx))
-        elif state == 'body' and not stripped.startswith('>'):
-            cur.ans += answer_chars(s)        # `>` 是 EX 区块 / 引用，用户手补，不计入
-            cur.body.append(clean_text(s))
-
-    close()
-    discards, has_line, discard_issues = parse_discards(lines)
-    return Note(path, entries, discards, has_line, issues + discard_issues)
+    @property
+    def form(self):
+        m = FORM_RE.search(self.header('来源') or '')
+        return m.group(1) if m else None
 
 
-# ── 检查 1：格式 ────────────────────────────────────────────────────────
-def check_format(note, src):
-    """校验行范围本身：合法、有内容、不大面积重叠、与笔记顺序一致。
+class Source:
+    def __init__(self, path: Path):
+        self.path = path
+        self.lines = path.read_text(encoding='utf-8').splitlines()
+        self.n = len(self.lines)
+        self.noise = {i for i, s in enumerate(self.lines, 1) if NOISE_RE.match(s)}
+        self.ch = [0]
+        for i, s in enumerate(self.lines, 1):
+            self.ch.append(self.ch[-1] + (0 if i in self.noise else len(re.sub(r'\s', '', s))))
 
-    原文一行是一整段口语，话题常在行中途转折，所以相邻 Q 共享一条边界行是正常的，不报。
-    重叠超过一行才提醒：那几行的字数会被两条 Q 的分母各算一次，压缩比因此虚高。
-    """
-    issues = list(note.issues)      # 解析期的语法问题
+    def chars(self, lo=1, hi=None):
+        hi = self.n if hi is None else hi
+        if lo < 1 or hi > self.n or lo > hi:
+            return 0
+        return self.ch[hi] - self.ch[lo - 1]
 
-    for e in note.entries:
-        if e.lo is None:
-            continue
-        if e.lo > e.hi or e.lo < 1 or e.hi > src.n:
-            issues.append(Issue('ERROR', '格式',
-                                f'Q「{e.label}」行范围 {e.lo}–{e.hi} 非法（原文共 {src.n} 行）',
-                                '改成正序、且落在原文行数内的区间', e.note_line))
-            e.lo = e.hi = None      # 判废：后面的检查据此跳过这条
-        elif src.chars(e.lo, e.hi) == 0:
-            issues.append(Issue('ERROR', '格式',
-                                f'Q「{e.label}」行范围 {e.lo}–{e.hi} 剔除噪音行后没有内容',
-                                '重新核对行号，指向实际讲述这段内容的原文行', e.note_line))
-            e.lo = e.hi = None
-
-    spans = [e for e in note.entries if e.usable]
-
-    for a, b in pairwise(sorted(spans, key=lambda e: (e.lo, e.hi))):
-        shared = min(a.hi, b.hi) - b.lo + 1
-        if shared > OVERLAP_OK:
-            issues.append(Issue('WARN', '格式',
-                                f'Q「{b.label}」行范围 {b.lo}–{b.hi} 与 Q「{a.label}」（{a.lo}–{a.hi}）'
-                                f'重叠 {shared} 行（行 {b.lo}–{min(a.hi, b.hi)}），这几行的字数被两条各算一次，'
-                                f'两条的实际压缩比都会偏高',
-                                '把重叠段判给其中一条，另一条的边界让开', b.note_line))
-
-    prev = None
-    for e in spans:                 # 按笔记出现顺序
-        if prev and e.lo < prev.lo:
-            issues.append(Issue('WARN', '格式',
-                                f'Q「{e.label}」行范围 {e.lo}–{e.hi} 早于上一条 Q（{prev.lo}–{prev.hi}），'
-                                f'笔记顺序与原文顺序不一致',
-                                '确认是有意回指；否则按原文顺序重排 Q', e.note_line))
-        prev = e
-
-    return issues
+    def line_chars(self, i):
+        return self.ch[i] - self.ch[i - 1]
 
 
-# ── 检查 2：切分 ────────────────────────────────────────────────────────
-def check_split(note, src):
-    """切分尺寸：单 Q 覆盖上限与全文密度带。
+# ── 计数 ──────────────────────────────────────────────────────
 
-    切分自由造成的危害集中在尺寸维度，这里就是拦截点：chunk 过大则压缩判断不可靠，
-    过碎或漏切则密度带外。
-    """
-    issues = []
-    for e in note.entries:
-        if not e.usable:
-            continue
-        eff = src.chars(e.lo, e.hi)
-        if eff > Q_CAP:
-            issues.append(Issue('ERROR', '切分',
-                                f'Q「{e.label}」覆盖 {eff} 有效字，超过单 Q 上限 {Q_CAP}',
-                                '拆成两条或更多 Q，各自声明压缩比与锚点', e.note_line))
-
-    n = sum(1 for e in note.entries if e.usable)
-    density = src.chars() / n if n else 0.0
-    lo, hi = DENSITY_BAND
-    if n and density < lo:
-        issues.append(Issue('WARN', '切分',
-                            f'密度 {density:.0f} 字/Q，低于 {lo}–{hi} 带，疑似切得过碎',
-                            '复查是否把同一论证拆散了；相邻同话题的 Q 合并'))
-    elif n and density > hi:
-        issues.append(Issue('WARN', '切分',
-                            f'密度 {density:.0f} 字/Q，高于 {lo}–{hi} 带，疑似漏切',
-                            '复查是否有议题被并进大 Q；按话题再切一轮'))
-    return issues, dict(n=n, density=density)
+def clean(s):
+    st = s.strip()
+    if st.startswith('>') or st.startswith('<!--') or CONCEPT_RE.match(st) or re.match(r'^[-*_]{3,}$', st):
+        return ''
+    s = ANNOT_RE.sub('', s)
+    s = re.sub(r'^\s*(?:[-+*]|\d+[.)])\s+', '', s)
+    s = re.sub(r'\[\[[^\]|]+\|([^\]]+)\]\]', r'\1', s)
+    s = re.sub(r'\[\[([^\]]+)\]\]', r'\1', s)
+    return re.sub(r'[*_`~#]', '', s)
 
 
-# ── 检查 3：覆盖 ────────────────────────────────────────────────────────
-def merge_ranges(nums):
-    """把零散行号合并成连续区间：{3,4,5,9,10} → [(3,5), (9,10)]。"""
+def chars(s):
+    return len(re.sub(r'\s', '', clean(s)))
+
+
+def answer_text(e):
+    return ''.join(clean(x) for x in e.answer)
+
+
+def answer_chars(e):
+    return len(re.sub(r'\s', '', answer_text(e)))
+
+
+def compress_ranges(vals):
     out = []
-    for x in sorted(nums):
+    for x in sorted(vals):
         if out and x == out[-1][1] + 1:
             out[-1][1] = x
         else:
             out.append([x, x])
-    return [tuple(r) for r in out]
+    return [tuple(x) for x in out]
 
 
-def check_coverage(note, src):
-    """原文每一行要么被 Q 覆盖，要么在头部登记为舍弃；两样都没有就是静默丢弃。"""
+def legacy_tier(pct):
+    return '保留' if pct >= 70 else ('标准' if pct >= 55 else '精简')
+
+
+# ── 解析 ──────────────────────────────────────────────────────
+
+def parse_discards(lines):
     issues = []
+    hits = [i for i, s in enumerate(lines, 1) if re.match(r'^>\s*已舍弃内容：', s)]
+    if not hits:
+        return [], issues
+    s = lines[hits[0] - 1]
+    if re.search(r'行\s*\d+(?:\s*–\s*\d+)?\s*[、,，]\s*\d', s):
+        issues.append(Issue('ERROR', '格式', '“已舍弃内容”存在省略“行”前缀的区间', '每个区间都写成“行 X–Y”', hits[0]))
+    if re.search(r'行\s*\d+\s*[-—~]\s*\d+', s):
+        issues.append(Issue('ERROR', '格式', '“已舍弃内容”区间连接号不是 –（U+2013）', '改为“行 X–Y”', hits[0]))
+    return [(int(a), int(b or a)) for a, b in DISCARD_RE.findall(s)], issues
+
+
+def parse_note(path: Path) -> Note:
+    lines = path.read_text(encoding='utf-8').splitlines()
+    discards, issues = parse_discards(lines)
+    entries, modules = [], []
+    cur, state, mod = None, '', ''
+    in_comment = None   # 正在读的多行注释：所属 Entry（核验块）或 'other'
+
+    def close():
+        nonlocal cur, state
+        if cur is not None and state == 'meta':
+            issues.append(Issue('ERROR', '格式', f'Q{cur.idx}“{cur.q[:20]}”缺少声明行', 'Q 标题下空一行写 *行 X–Y · 标准*', cur.note_line))
+        elif cur is not None and state == 'keys':
+            issues.append(Issue('ERROR', '格式', f'Q{cur.idx}“{cur.q[:20]}”缺少关键词行', '紧跟声明行写 *关键词：a、b、c*', cur.meta_line))
+        cur, state = None, ''
+
+    for i, s in enumerate(lines, 1):
+        st = s.strip()
+        if in_comment is not None:
+            if isinstance(in_comment, Entry):
+                body = st[:-3].strip() if st.endswith('-->') else st
+                if body:
+                    in_comment.verify['items'].append(body)
+                in_comment.verify['end'] = i
+            if st.endswith('-->'):
+                in_comment = None
+            continue
+        mv = VERIFY_RE.match(st)
+        if mv and cur is not None and state in ('body', 'keys'):
+            if state == 'keys':
+                issues.append(Issue('ERROR', '格式', f'Q{cur.idx} 核验标记出现在关键词行之前', '核验标记放在关键词行之后', i))
+            st_raw = mv.group(1)
+            cur.verify = {'status': st_raw.replace('（复核）', ''), 'rechecked': '复核' in st_raw, 'line': i, 'end': i, 'items': []}
+            state = 'body'
+            if not mv.group(2):
+                in_comment = cur
+            continue
+        if st.startswith('<!--'):
+            if not st.endswith('-->'):
+                in_comment = 'other'
+            continue
+        mm = MODULE_RE.match(s)
+        if mm:
+            close()
+            mod = mm.group(1).strip()
+            modules.append({'title': mod, 'line': i, 'range': None, 'concept': []})
+            continue
+        mr = MODULE_RANGE_RE.match(st)
+        if mr and modules:
+            modules[-1]['range'] = (int(mr.group(1)), int(mr.group(2)))
+            continue
+        mq = Q_RE.match(s)
+        if mq:
+            close()
+            cur = Entry(len(entries) + 1, mq.group(1).strip(), i, module=mod)
+            entries.append(cur)
+            state = 'meta'
+            continue
+        if L_RE.match(s):
+            close()
+            state = 'tail'
+            continue
+        if CONCEPT_RE.match(st):
+            close()
+            if modules:
+                modules[-1]['concept'].append((i, st))
+            continue
+        if cur is not None and state == 'meta' and st:
+            m, lm = META_RE.match(st), LEGACY_META_RE.match(st)
+            if m:
+                cur.lo, cur.hi, cur.tier = int(m.group(1)), int(m.group(2)), m.group(3)
+            elif lm:
+                cur.lo, cur.hi, cur.legacy_pct = int(lm.group(1)), int(lm.group(2)), int(lm.group(3))
+                cur.tier = legacy_tier(cur.legacy_pct)
+            else:
+                issues.append(Issue('ERROR', '格式', f'Q{cur.idx} 声明行不合法：{st[:30]}', '写成 *行 X–Y · 保留|标准|精简*（连接号 – U+2013，间隔号 · U+00B7）', i))
+                state = 'body'
+                continue
+            cur.meta_line, state = i, 'keys'
+            continue
+        if cur is not None and state == 'keys' and st:
+            m = KEY_RE.match(st)
+            if m:
+                cur.keywords = [x.strip() for x in re.split('[、,，]', m.group(1))]
+                cur.key_line, state = i, 'body'
+                continue
+            issues.append(Issue('ERROR', '格式', f'Q{cur.idx} 缺少关键词行', '紧跟声明行写 *关键词：a、b、c*', i))
+            state = 'body'
+        if cur is not None and state == 'body' and st and not st.startswith('>'):
+            cur.answer.append(s)
+    close()
+    return Note(path, lines, entries, modules, discards, issues)
+
+
+# ── 各阶段检查 ────────────────────────────────────────────────
+
+def check_source(note):
+    issues, lines = [], note.lines
+    if not lines or not re.match(r'^# 讲座笔记：.*\S', lines[0]):
+        issues.append(Issue('ERROR', '来源', '第一行应为“# 讲座笔记：[标题]”', '补写一级标题', 1))
+    pos = []
+    for n in HEADER_FIELDS:
+        hits = [i for i, s in enumerate(lines, 1) if re.match(r'^>\s*' + re.escape(n) + r'：', s)]
+        if len(hits) != 1:
+            issues.append(Issue('ERROR', '来源', f'头部字段“{n}”应恰好一次（实际 {len(hits)}）', '补齐或去重；没有内容写“无”', hits[0] if hits else 1))
+        elif not re.sub(r'^>\s*' + re.escape(n) + r'：\s*', '', lines[hits[0] - 1]).strip():
+            issues.append(Issue('ERROR', '来源', f'头部字段“{n}”为空', '没有内容时写“无”', hits[0]))
+        pos.append(hits[0] if hits else 10 ** 9)
+    if pos != sorted(pos):
+        issues.append(Issue('ERROR', '来源', '头部字段顺序错误', '按 来源→对谈人→已舍弃内容→内容存疑→转写错误 排列'))
+    if note.header('来源') is not None and not note.form:
+        issues.append(Issue('ERROR', '来源', f'“来源”缺少“形式：{"|".join(FORMS)}”', '在来源行内写明，例如“……，形式：对谈，……”'))
+    speaker = {}
+    for label, name in re.findall(r'(\d+)号讲话人\s*[，,、]?\s*([^；;，,)）]+)', note.header('对谈人') or ''):
+        if label in speaker and speaker[label] != name.strip():
+            issues.append(Issue('ERROR', '来源', f'{label}号讲话人身份映射冲突', '统一同一标号的身份'))
+        speaker[label] = name.strip()
+    return issues
+
+
+def check_raw_fresh(note, src):
+    """raw 相对 HEAD 有改动、而笔记已有提交版本时，旧行号可能失效。"""
+    def git(*args):
+        return subprocess.run(['git', '-C', str(ROOT), *args], capture_output=True, text=True)
+    try:
+        if git('rev-parse').returncode:
+            return []
+        changed = git('diff', '--quiet', 'HEAD', '--', str(src.path.resolve())).returncode == 1
+        note_tracked = git('cat-file', '-e', f'HEAD:{note.path.resolve().relative_to(ROOT).as_posix()}').returncode == 0
+    except (OSError, ValueError):
+        return []
+    if changed and note_tracked:
+        return [Issue('WARN', '原文', 'raw 相对 HEAD 有改动，已提交笔记的行号可能失效', '运行 rebreak 校验，并重核所有行号')]
+    return []
+
+
+def check_modules(note, src):
+    issues, spans = [], []
+    if not note.modules:
+        return [Issue('ERROR', '切分', '没有模块标题', '添加“## 模块一：…”')]
+    for m in note.modules:
+        if not m['range']:
+            issues.append(Issue('ERROR', '切分', f'模块“{m["title"]}”缺少模块范围', '模块标题下写 *模块范围：行 X–Y*', m['line']))
+            continue
+        a, b = m['range']
+        spans.append((a, b, m))
+        if a < 1 or b > src.n or a > b:
+            issues.append(Issue('ERROR', '切分', f'模块范围 {a}–{b} 越界或倒序', f'改为 1–{src.n} 内的正序区间', m['line']))
+    spans.sort(key=lambda x: x[0])
+    for x, y in zip(spans, spans[1:]):
+        if x[1] >= y[0]:
+            issues.append(Issue('ERROR', '切分', f'模块范围 {x[0]}–{x[1]} 与 {y[0]}–{y[1]} 重叠', '调整模块边界', y[2]['line']))
     covered = set()
-    for e in note.entries:
-        if e.usable:
-            covered.update(range(e.lo, e.hi + 1))
-
-    declared = set()
+    for a, b, _ in spans:
+        covered.update(range(max(1, a), min(src.n, b) + 1))
     for a, b in note.discards:
-        declared.update(range(a, b + 1))
-
-    if not note.has_discard_line:
-        issues.append(Issue('WARN', '覆盖', '头部没有"已舍弃内容"行',
-                            '按 WORKFLOW 的输出格式补一行，登记开场、广告、告别等舍弃内容及其行号'))
-
-    gaps, exempt = [], 0
-    for a, b in merge_ranges(set(range(1, src.n + 1)) - covered):
-        chars = src.chars(a, b)                 # 与压缩比同一个"实质字数"口径
-        if chars <= GAP_BUDGET:                 # 纯噪音或碎片，自动豁免
-            exempt += 1
+        covered.update(range(max(1, a), min(src.n, b) + 1))
+    for a, b in compress_ranges(set(range(1, src.n + 1)) - covered - src.noise):
+        n = src.chars(a, b)
+        if n == 0:
             continue
-        body = [i for i in range(a, b + 1) if i not in src.noise]
-        missing = [i for i in body if i not in declared]
-        gaps.append(dict(lo=a, hi=b, chars=chars, silent=bool(missing)))
-        if missing:
-            head = re.sub(r'\s', '', src.lines[missing[0] - 1])[:28]
-            shown = ','.join(map(str, missing[:6])) + ('…' if len(missing) > 6 else '')
-            issues.append(Issue('ERROR', '覆盖',
-                                f'原文行 {a}–{b}（{chars} 字）静默丢弃：行 {shown} 既没被任何 Q 覆盖，'
-                                f'也没在头部"已舍弃内容"登记。首行:「{head}…」',
-                                '是论述内容 → 补一条 Q 覆盖它；是闲聊/过渡/广告 → '
-                                '在头部"已舍弃内容"写明性质与行号'))
-
-    stats = dict(covered=len(covered), total=src.n, exempt=exempt,
-                 declared=len(declared), gaps=gaps)
-    return issues, stats
+        lv = 'WARN' if n <= CFG['ledger']['gap_budget'] else 'ERROR'
+        issues.append(Issue(lv, '切分', f'raw 行 {a}–{b}（{n} 字）未落入任何模块或结构性舍弃', '扩展相邻模块范围，或登记进“已舍弃内容”'))
+    return issues
 
 
-# ── 检查 4：压缩比 ──────────────────────────────────────────────────────
-def check_ratio(note, src):
-    """按剔除噪音后的原文字数核算实际压缩比，与声明值比对；全文总量对压缩带。"""
-    issues, rows, devs = [], [], []
-    tot_ans = tot_eff = 0
-
+def valid_entries(note, src):
+    issues, usable = [], []
     for e in note.entries:
-        if not e.usable or e.ans == 0:
+        if not e.usable:
             continue
+        if e.lo < 1 or e.hi > src.n or e.lo > e.hi:
+            issues.append(Issue('ERROR', '格式', f'Q{e.idx} 范围 {e.lo}–{e.hi} 越界或倒序', f'改为 1–{src.n} 内的正序区间', e.note_line))
+            continue
+        if src.chars(e.lo, e.hi) == 0:
+            issues.append(Issue('ERROR', '格式', f'Q{e.idx} 范围内只有空行或讲话人标号', '核对行号', e.note_line))
+            continue
+        usable.append(e)
+    for a, b in zip(usable, usable[1:]):
+        if b.lo < a.lo:
+            issues.append(Issue('ERROR', '切分', f'Q{b.idx} 起始行 {b.lo} 早于前一条 Q{a.idx} 的 {a.lo}', 'Q 按 raw 顺序排列', b.note_line))
+    su = sorted(usable, key=lambda x: x.lo)
+    for a, b in zip(su, su[1:]):
+        ov = min(a.hi, b.hi) - b.lo + 1
+        if ov > 1:
+            issues.append(Issue('ERROR', '切分', f'Q{a.idx} 与 Q{b.idx} 范围重叠 {ov} 行（{b.lo}–{min(a.hi, b.hi)}）', '相邻 Q 最多共享 1 个边界行', b.note_line))
+    return issues, usable
+
+
+def check_ledger(note, src, final=True):
+    L = CFG['ledger']
+    issues = list(note.issues)
+    x, usable = valid_entries(note, src)
+    issues += x
+    if not note.entries:
+        issues.append(Issue('ERROR', '切分', '没有任何 Q', '按模块建立 Q 账本'))
+    pending = [m for m in note.modules if m['range'] and not any(e.module == m['title'] for e in note.entries)]
+    for m in note.modules:
+        if m['range'] and m not in pending:
+            issues.append(Issue('ERROR', '格式', f'模块“{m["title"]}”已建账，但模块范围行未删除', '删除该模块的 *模块范围：…* 行', m['line']))
+    if pending and not final:
+        issues.append(Issue('WARN', '进度', f'建账进行中：还有 {len(pending)} 个模块未建账（{"、".join(m["title"].split("：")[0] for m in pending)}）', '继续 pack <笔记> --module N 建账'))
+    elif pending:
+        issues.append(Issue('ERROR', '进度', f'还有 {len(pending)} 个模块未建账', '全部模块建账后才能写答案'))
+    for e in note.entries:
+        if e.legacy_pct is not None:
+            issues.append(Issue('WARN', '格式', f'Q{e.idx} 使用旧格式“压缩至约 {e.legacy_pct}%”，按“{e.tier}”档检查', '改写为 *行 X–Y · 保留|标准|精简*', e.meta_line))
+        if e.meta_line and (not L['keywords'][0] <= len(e.keywords) <= L['keywords'][1] or any(not k for k in e.keywords)):
+            issues.append(Issue('ERROR', '关键词', f'Q{e.idx} 关键词 {len(e.keywords)} 个（要求 {L["keywords"][0]}–{L["keywords"][1]}）', '补齐或删减；用“、”分隔', e.key_line or e.note_line))
+    for e in usable:
         eff = src.chars(e.lo, e.hi)
-        actual = 100.0 * e.ans / eff
-        dev = actual - e.decl
-        devs.append(dev)
-        tot_ans += e.ans
-        tot_eff += eff
+        if eff > L['q_cap']:
+            issues.append(Issue('ERROR', '切分', f'Q{e.idx} 覆盖 {eff} 有效字，超过 {L["q_cap"]}', '拆成多条 Q', e.note_line))
+    n = len(usable)
+    density = src.chars() / n if n else 0
+    if n and not pending and not L['density'][0] <= density <= L['density'][1]:
+        issues.append(Issue('WARN', '切分', f'Q 密度 {density:.0f} 字/Q，参考带 {L["density"][0]}–{L["density"][1]}', '复查是否漏切或切得过碎；确认合理可继续'))
+    covered_chars = sum(src.chars(e.lo, e.hi) for e in usable)
+    keep = sum(src.chars(e.lo, e.hi) for e in usable if e.tier == '保留')
+    if covered_chars and 100 * keep / covered_chars > L['keep_share_max']:
+        issues.append(Issue('WARN', '档位', f'“保留”档占 Q 覆盖字数 {100 * keep / covered_chars:.0f}%（参考上限 {L["keep_share_max"]}%）', '只有引文、逐轮对话、密集论证才用“保留”；逐条复查'))
+    if not any(re.match(r'^>\s*已舍弃内容：', s) for s in note.lines):
+        issues.append(Issue('ERROR', '覆盖', '缺少“已舍弃内容”头部字段', '没有舍弃时写“无”'))
+    declared, covered = set(), set()
+    for a, b in note.discards:
+        if a < 1 or b > src.n or a > b:
+            issues.append(Issue('ERROR', '覆盖', f'已舍弃内容区间 {a}–{b} 越界或倒序', '改为 raw 范围内的正序区间'))
+        declared.update(range(a, b + 1))
+    for e in usable:
+        covered.update(range(e.lo, e.hi + 1))
+    for m in pending:
+        covered.update(range(max(1, m['range'][0]), min(src.n, m['range'][1]) + 1))
+    for a, b in compress_ranges(covered & declared):
+        if src.chars(a, b) > L['gap_budget']:
+            issues.append(Issue('WARN', '覆盖', f'raw 行 {a}–{b} 同时被 Q 覆盖和登记为舍弃', '二选一'))
+    for a, b in compress_ranges(set(range(1, src.n + 1)) - covered - declared - src.noise):
+        eff = src.chars(a, b)
+        if eff == 0:
+            continue
+        lv = 'WARN' if eff <= L['gap_budget'] else 'ERROR'
+        issues.append(Issue(lv, '覆盖', f'raw 行 {a}–{b}（{eff} 字）未被 Q 覆盖，也未登记舍弃', '扩展相邻 Q、新增 Q，或在“已舍弃内容”登记性质与行号'))
+    stats = {'q': n, 'raw_chars': src.chars(), 'covered_chars': covered_chars, 'density': round(density),
+             'max_q': max((src.chars(e.lo, e.hi) for e in usable), default=0),
+             'tiers': {t: sum(1 for e in usable if e.tier == t) for t in TIERS}}
+    return issues, stats, usable
 
-        flag = ''
-        if dev < -DEV_NEG:
-            flag = 'ERR'
-            issues.append(Issue('ERROR', '压缩比',
-                                f'Q「{e.label}」压得比声明狠 {-dev:.0f}pp（声明 {e.decl}% / '
-                                f'实际 {actual:.0f}%），细节丢失方向，超出 {DEV_NEG}pp',
-                                '先复评声明值本身是否判错，再对照原文补回被削掉的内容', e.note_line))
-        elif dev > DEV_POS:
-            flag = 'warn'
-            issues.append(Issue('WARN', '压缩比',
-                                f'Q「{e.label}」写得比声明多 {dev:.0f}pp（声明 {e.decl}% / '
-                                f'实际 {actual:.0f}%）',
-                                '单条不打回；全文压缩带超标时，优先从这类条目收', e.note_line))
-        elif e.decl >= HI_TIER and dev <= -HI_TIER_NEG:
-            flag = 'warn'
-            issues.append(Issue('WARN', '压缩比',
-                                f'Q「{e.label}」高保留档（声明 {e.decl}%）实际只有 {actual:.0f}%，'
-                                f'承重内容疑似被删',
-                                '对照原文找回缺口：要么补回例子/引文/对话，要么下修声明值', e.note_line))
 
-        rows.append(dict(note_line=e.note_line, lo=e.lo, hi=e.hi, eff=eff, ans=e.ans,
-                         decl=e.decl, actual=actual, dev=dev, flag=flag, q=e.q[:34]))
+def q_ratio(e, src):
+    eff, ans = src.chars(e.lo, e.hi), answer_chars(e)
+    return eff, ans, (100 * ans / eff if eff else 0)
 
-    # 一份形状固定的统计：没有可核算的条目时各项归零，消费方只看 n 决定要不要显示。
-    notable = [d for d in devs if abs(d) >= SYS_NOTABLE]
-    stats = dict(
-        rows=rows,
-        n=len(devs),
-        total=100.0 * tot_ans / tot_eff if tot_eff else 0.0,
-        mean=sum(devs) / len(devs) if devs else 0.0,
-        mean_abs=sum(abs(d) for d in devs) / len(devs) if devs else 0.0,
-        tight=sum(1 for d in devs if d < 0),                # 压得比声明狠
-        loose=sum(1 for d in devs if d > 0),
-        neg_frac=sum(1 for d in notable if d < 0) / len(notable) if notable else 0.0,
-    )
 
-    lo, hi = TOTAL_BAND
-    if tot_eff and stats['total'] < lo:
-        issues.append(Issue('ERROR', '压缩比',
-                            f'全文实际压缩 {stats["total"]:.1f}%，低于压缩带 {lo}–{hi}%',
-                            '整体取舍过狠：复评预算分配，上调松掉了内容的条目的声明并补回内容'))
-    elif tot_eff and stats['total'] > hi:
-        issues.append(Issue('ERROR', '压缩比',
-                            f'全文实际压缩 {stats["total"]:.1f}%，高于压缩带 {lo}–{hi}%',
-                            '接近转述：重新分配预算，压低松散段落的声明并按新值重写'))
-
-    # 单条都在容差内，但整体一边倒地压得更狠——只有均值与占比同时越线才报。
-    if (stats['n'] >= SYS_MIN_Q and stats['mean'] <= SYS_MEAN_DEV
-            and stats['neg_frac'] >= SYS_NEG_FRAC):
-        issues.append(Issue('WARN', '压缩比',
-                            f'系统性偏压：平均偏差 {stats["mean"]:+.1f}pp，'
-                            f'{stats["neg_frac"]:.0%} 的条目压得比声明狠',
-                            '逐条复查高保留档的取舍，例子、引文、逐轮对话是否被整体削掉了'))
+def check_draft(note, src, usable):
+    D = CFG['draft']
+    issues, rows = [], []
+    ta = te = expect = 0
+    todo = [e for e in usable if not e.answered]
+    if todo:
+        issues.append(Issue('ERROR', '答案', f'还有 {len(todo)} 条 Q 没有答案：' + '、'.join(f'Q{e.idx}' for e in todo),
+                            f'pack {note.path.name} Q{todo[0].idx}（或 --module N），然后写答案'))
+    for e in usable:
+        if not e.answered:
+            continue
+        eff, ans, actual = q_ratio(e, src)
+        txt = re.sub(r'\s', '', answer_text(e).lower())
+        for k in e.keywords:
+            if k and re.sub(r'\s', '', k.lower()) not in txt:
+                issues.append(Issue('ERROR', '关键词', f'Q{e.idx} 关键词“{k}”未在本答案出现', '补回该细节；查证后写法改变时同步改关键词写法', e.note_line))
+        lo, hi = TIERS[e.tier]
+        rows.append({'q': e.idx, 'tier': e.tier, 'eff': eff, 'ans': ans, 'actual': round(actual, 1)})
+        ta, te, expect = ta + ans, te + eff, expect + eff * (lo + hi) / 2
+        if not lo <= actual <= hi:
+            if actual < lo:
+                order = list(TIERS)
+                lower = order[order.index(e.tier) + 1] if order.index(e.tier) + 1 < len(order) else None
+                side, fix = '低于', '回到 raw 找被略掉的例子、限定语、对话轮次补回；raw 里找不到可补的内容时' + (f'改为“{lower}”档' if lower else '保持现状并在 WARN 中说明') + '。严禁为凑字数加入 raw 没有的话'
+            else:
+                side, fix = '高于', '删去复述性内容和口语铺垫'
+            issues.append(Issue('WARN' if eff < D['small_q'] else 'ERROR', '压缩比',
+                                f'Q{e.idx} 实际 {actual:.1f}%（{ans}/{eff} 字），{side}“{e.tier}”档 {lo}–{hi}%',
+                                f'{fix}；本档目标 {eff * lo // 100}–{eff * hi // 100} 字', e.note_line))
+    stats = {'answered': len(rows), 'rows': rows}
+    if te:
+        total, exp = 100 * ta / te, expect / te
+        stats.update(total=round(total, 1), expected=round(exp, 1))
+        if len(rows) == len(usable):
+            if total - exp > D['bias_warn']:
+                issues.append(Issue('WARN', '压缩比', f'全文实际 {total:.1f}%，比档位中值期望 {exp:.1f}% 高 {total - exp:.1f}pp，整体偏满', '复查是否在转述而非提炼'))
+            elif exp - total > D['bias_warn']:
+                issues.append(Issue('WARN', '压缩比', f'全文实际 {total:.1f}%，比档位中值期望 {exp:.1f}% 低 {exp - total:.1f}pp，整体偏简', '复查承重细节是否丢失'))
+            band = FORMS.get(note.form)
+            if band and not band[0] <= total <= band[1]:
+                issues.append(Issue('WARN', '压缩比', f'全文实际 {total:.1f}%，不在“{note.form}”参考带 {band[0]}–{band[1]}%', '复查档位分布；合理则继续'))
     return issues, stats
 
 
-# ── 检查 5：锚点 ────────────────────────────────────────────────────────
-def check_anchors(note, full):
-    """深压缩 Q 的锚点申报（两个阶段都查）与兑现（仅 full 阶段查）。
-
-    锚点是细切阶段写下的字面承诺：答案写成后这些细节必须出现。匹配对锚点与答案做同一
-    归一化（小写、折叠空白），另试无空白形态，避免中英混排的空白差异造成漏判。
-    """
+def check_verify(note, usable):
     issues = []
-    n_deep = n_decl = 0
-    for e in note.entries:
-        if e.anchors is not None:
-            n_decl += 1
-        if e.decl is not None and e.decl < ANCHOR_TIER:
-            n_deep += 1
-            if e.anchors is None:
-                issues.append(Issue('ERROR', '锚点',
-                                    f'Q「{e.label}」声明 {e.decl}% 属深压缩，未申报锚点',
-                                    f'在声明行下一行补 `{ANCHOR_SPEC}`：{ANCHOR_MIN}–{ANCHOR_MAX} 个'
-                                    f'承重细节，按笔记中将出现的写法', e.note_line))
-        if not e.anchors:
+    for e in usable:
+        v = e.verify
+        if v is None:
+            issues.append(Issue('ERROR', '核验', f'Q{e.idx} 尚未核验', f'verify {note.path.name} Q{e.idx}', e.note_line))
+        elif v['status'] == '待处置':
+            n = sum(1 for x in v['items'] if x.startswith('-') and '→' not in x)
+            tag = '已处置（复核）' if v['rechecked'] else '已处置'
+            issues.append(Issue('ERROR', '核验', f'Q{e.idx} 有 {n} 条核验发现待处置', f'逐条处置：改答案或判为误报，在条目末尾写“→ 处置：…”，再把状态改为“{tag}”', v['line']))
+        elif v['status'] == '已处置':
+            bad = [x for x in v['items'] if x.startswith('-') and '→' not in x]
+            if bad:
+                issues.append(Issue('ERROR', '核验', f'Q{e.idx} 标为已处置，但有 {len(bad)} 条缺少“→ 处置：…”', '为每条补写处置说明', v['line']))
+            elif not v['rechecked']:
+                issues.append(Issue('ERROR', '核验', f'Q{e.idx} 已处置但尚未复核', f'verify {note.path.name} --recheck', v['line']))
+        elif v['status'] == '失败':
+            issues.append(Issue('ERROR', '核验', f'Q{e.idx} 核验调用失败', f'重跑 verify {note.path.name} Q{e.idx}', v['line']))
+        elif v['status'] != '通过':
+            issues.append(Issue('ERROR', '核验', f'Q{e.idx} 核验状态“{v["status"]}”无法识别', '状态只能是 通过 / 待处置 / 已处置', v['line']))
+    return issues
+
+
+def check_concepts(note):
+    issues = []
+    for mi, m in enumerate(note.modules):
+        c = m['concept']
+        if len(c) != 1:
+            issues.append(Issue('ERROR', '概念', f'模块“{m["title"]}”概念行应恰好一行（实际 {len(c)}）', '模块末尾写“概念：[[分类#概念]], …”或“概念：无”', m['line']))
+        if not c:
             continue
-        if not (ANCHOR_MIN <= len(e.anchors) <= ANCHOR_MAX):
-            issues.append(Issue('WARN', '锚点',
-                                f'Q「{e.label}」申报了 {len(e.anchors)} 个锚点，'
-                                f'常规为 {ANCHOR_MIN}–{ANCHOR_MAX} 个',
-                                '过少 → 补齐承重细节；过多 → 只留答案离开它就失真的那些', e.note_line))
-        if full and e.ans:
-            text = norm_match(' '.join(e.body))
-            nows = re.sub(r'\s', '', text)
-            for a in e.anchors:
-                an = norm_match(a)
-                if an not in text and re.sub(r'\s', '', an) not in nows:
-                    issues.append(Issue('ERROR', '锚点',
-                                        f'Q「{e.label}」申报的锚点「{a}」未出现在答案中',
-                                        '补回该细节；确属取舍变更的，更新锚点行并复评声明压缩比',
-                                        e.note_line))
-    return issues, dict(deep=n_deep, declared=n_decl)
+        end = note.modules[mi + 1]['line'] if mi + 1 < len(note.modules) else next(
+            (i for i, s in enumerate(note.lines, 1) if L_RE.match(s)), len(note.lines) + 1)
+        if any(s.strip() for s in note.lines[c[0][0]:end - 1]):
+            issues.append(Issue('ERROR', '概念', f'模块“{m["title"]}”概念行之后还有内容', '概念行放在模块所有 Q&A 之后', c[0][0]))
+        text = c[0][1]
+        links = re.findall(r'\[\[([^\]]+)\]\]', text)
+        if text.strip() != '概念：无' and not links:
+            issues.append(Issue('ERROR', '概念', f'模块“{m["title"]}”概念行没有链接', '写 [[分类#概念]]，或“概念：无”', c[0][0]))
+        seen = []
+        for l in links:
+            mm = LINK_RE.match('[[' + l + ']]')
+            if not mm or not mm.group(2) or mm.group(1) not in CONCEPT_ORDER:
+                issues.append(Issue('ERROR', '概念', f'概念链接不合法：[[{l}]]', f'写 [[分类#概念]]，分类为 {"/".join(CONCEPT_ORDER)}', c[0][0]))
+                continue
+            seen.append(CONCEPT_ORDER.index(mm.group(1)))
+        if seen != sorted(seen):
+            issues.append(Issue('ERROR', '概念', f'模块“{m["title"]}”概念分类顺序错误', '按 人物→学派与方法→核心概念→精神分析 排列', c[0][0]))
+    return issues
 
 
-# ── 定位原文 ────────────────────────────────────────────────────────────
-def find_source(note_path):
-    """在 <笔记目录>/raw/ 下匹配原文：同名 → 去 _vN 后缀同名 → 首段编号唯一匹配。"""
-    rawdir = note_path.parent / 'raw'
-    if not rawdir.is_dir():
-        die(f'{rawdir} 不存在，请显式传入原文路径')
-    cands = sorted(rawdir.glob('*.txt'))
-    stem = note_path.stem
+def check_left(note):
+    hits = [i for i, s in enumerate(note.lines, 1) if L_RE.match(s)]
+    if len(hits) != 1:
+        return [Issue('ERROR', "What's Left", f'“## L: What\'s Left”应恰好一次（实际 {len(hits)}）', '在文末保留唯一章节')]
+    issues, seen = [], 0
+    for i in range(hits[0] + 1, len(note.lines) + 1):
+        s = note.lines[i - 1]
+        if not s.strip():
+            continue
+        if s.startswith('#'):
+            issues.append(Issue('ERROR', "What's Left", "What's Left 之后还有其他标题", "What's Left 必须位于文末", i))
+            continue
+        m = re.match(r'^- \[(书目|脉络|概念|话题)\] .+?\s?— \S.*$', s)
+        if not m:
+            issues.append(Issue('ERROR', "What's Left", '线索格式不合法', '写成“- [标签] 对象 — 深挖理由”（— 为 U+2014，后面有空格）', i))
+            continue
+        n = LABELS[m.group(1)]
+        if n < seen:
+            issues.append(Issue('ERROR', "What's Left", f'标签顺序倒退：{m.group(1)}', '按 书目→脉络→概念→话题 排列', i))
+        seen = max(seen, n)
+    return issues
 
-    for c in cands:
-        if c.stem == stem:
-            return c
-    base = re.sub(r'_v\d+$', '', stem)
-    for c in cands:
-        if c.stem == base:
-            return c
-    hits = [c for c in cands if c.stem.split('_')[0] == base.split('_')[0]]
+
+# ── 阶段判断与 check ──────────────────────────────────────────
+
+def detect_stage(note):
+    if not note.entries and any(m['range'] for m in note.modules):
+        return 'modules'
+    if not note.entries:
+        return 'modules' if note.modules else 'source'
+    if not any(e.answered for e in note.entries):
+        return 'ledger'
+    if not all(e.answered for e in note.entries) or any(e.verify is None for e in note.entries):
+        return 'draft'
+    if any(e.verify['status'] not in ('通过', '已处置') for e in note.entries):
+        return 'verify'
+    if not all(m['concept'] for m in note.modules):
+        return 'concepts' if any(m['concept'] for m in note.modules) else 'verify'
+    if not any(L_RE.match(s) for s in note.lines):
+        return 'left'
+    return 'complete'
+
+
+NEXT = {
+    'source': '步骤 1：通读 raw（pack <笔记> --lines 1 200 分段读），写模块标题与 *模块范围：行 X–Y*。',
+    'modules': '步骤 2：逐模块 pack <笔记> --module N，建立 Q 账本；全部建完后删除模块范围行。',
+    'ledger': '步骤 3：逐条 pack <笔记> Qn（或 --module N）写答案，每写完一个模块跑一次 check。',
+    'draft': '全部写完且无 ERROR 后，步骤 4：verify <笔记> --all，处置核验发现，再 verify <笔记> --recheck 复核一次。',
+    'verify': '步骤 5：为每个模块写概念行并在 _concepts 回链，然后运行 links。',
+    'concepts': "概念行齐全、links 通过后，步骤 6：在文末写 ## L: What's Left。",
+    'left': "步骤 6：在文末写 ## L: What's Left。",
+    'complete': '全部自动检查通过。按 WORKFLOW 收尾清单自查后交付。',
+}
+
+
+def run_check(path, raw, stage=None):
+    note = parse_note(path)
+    stage = stage or detect_stage(note)
+    k = STAGES.index(stage)
+    issues, stats, src = check_source(note), {}, None
+    if stage != 'source':
+        src = Source(raw or find_source(path))
+        issues += check_raw_fresh(note, src)
+    if stage == 'modules':
+        issues += check_modules(note, src)
+    elif stage != 'source':
+        x, stats, usable = check_ledger(note, src, final=k > STAGES.index('ledger'))
+        issues += x
+        if k >= STAGES.index('draft'):
+            x, stats['ratio'] = check_draft(note, src, usable)
+            issues += x
+        if k >= STAGES.index('verify'):
+            issues += check_verify(note, usable)
+        if k >= STAGES.index('concepts'):
+            issues += check_concepts(note)
+        if k >= STAGES.index('complete'):
+            issues += check_left(note)
+    return {'note': note, 'source': src, 'stage': stage, 'issues': issues, 'stats': stats}
+
+
+def verdict(issues):
+    return 'FAIL' if any(i.level == 'ERROR' for i in issues) else ('WARN' if issues else 'PASS')
+
+
+def render(r):
+    n, src, s = r['note'], r['source'], r['stats']
+    print(f'笔记 {n.path} · 当前 {STAGE_NAMES[r["stage"]]} · Q={len(n.entries)} · 形式={n.form or "未写"}')
+    if src:
+        print(f'原文 {src.path} · {src.n} 行 · 有效字 {src.chars()}')
+    if s.get('q'):
+        print(f'账本 Q {s["q"]} 条 · 密度 {s["density"]} 字/Q · 最大 Q {s["max_q"]} 字 · 档位 {s["tiers"]}')
+    rt = s.get('ratio', {})
+    if rt.get('total') is not None:
+        print(f'答案 已写 {rt["answered"]}/{s["q"]} · 全文实际 {rt["total"]}% · 档位中值期望 {rt["expected"]}%')
+    for i in sorted(r['issues'], key=lambda x: (x.level != 'ERROR', x.line)):
+        print(f'[{i.level}] {i.check}' + (f'（笔记行 {i.line}）' if i.line else '') + f' {i.msg}')
+        if i.fix:
+            print(f'    → {i.fix}')
+    v = verdict(r['issues'])
+    print(f'结论 {v} · {sum(i.level == "ERROR" for i in r["issues"])} ERROR / {sum(i.level == "WARN" for i in r["issues"])} WARN')
+    if v != 'FAIL':
+        nxt = '继续为未建账的模块建账（pack <笔记> --module N），全部建完后再跑 check。' if any(i.check == '进度' for i in r['issues']) else NEXT[r['stage']]
+        print(f'下一步 {nxt}')
+
+
+# ── pack / verify / show / strip ─────────────────────────────
+
+def raw_block(src, lo, hi, ctx=0, cumulative=False):
+    out, acc = [], 0
+    for i in range(max(1, lo - ctx), min(src.n, hi + ctx) + 1):
+        inside = lo <= i <= hi
+        mark = ' ' if inside else '·'
+        if cumulative:
+            acc += src.line_chars(i) if inside else 0
+            out.append(f'{i:>5}{mark}[{acc:>5}] {src.lines[i - 1]}')
+        else:
+            out.append(f'{i:>5}{mark} {src.lines[i - 1]}')
+    return '\n'.join(out)
+
+
+def anchors(src, lo, hi):
+    text = '\n'.join(src.lines[lo - 1:hi])
+    found = {}
+    for pat in (r'《[^》]{1,30}》', r'“[^”]{2,12}”', r'(?<!\d)(?:1[5-9]|20)\d{2}(?!\d)', r'[A-Za-z][A-Za-z\'\-]{3,}(?: [A-Z][a-z]+)*'):
+        for x in re.findall(pat, text):
+            if x.lower() not in STOPWORDS:
+                found[x] = found.get(x, 0) + 1
+    return sorted(found, key=lambda k: -found[k])[:20]
+
+
+def select(note, specs, module=None):
+    if module is not None:
+        if not 1 <= module <= len(note.modules):
+            raise SystemExit(f'模块序号应在 1–{len(note.modules)}')
+        title = note.modules[module - 1]['title']
+        return [e for e in note.entries if e.module == title]
+    out = []
+    for sp in specs:
+        m = re.fullmatch(r'Q(\d+)(?:-Q?(\d+))?', sp, re.I)
+        if not m:
+            raise SystemExit(f'无法识别 {sp}，用 Q12 或 Q12-Q15')
+        a, b = int(m.group(1)), int(m.group(2) or m.group(1))
+        out += [e for e in note.entries if a <= e.idx <= b]
+    return out
+
+
+SPEAKER_RE = re.compile(r'^\s*(\d+号讲话人|发言人\s*\d+)')
+
+
+def speaker_at(src, i):
+    for j in range(i, 0, -1):
+        m = SPEAKER_RE.match(src.lines[j - 1])
+        if m:
+            return f'{m.group(1)}（标号在第 {j} 行）'
+    return '未标注'
+
+
+def write_packet(e, src):
+    eff = src.chars(e.lo, e.hi)
+    lo, hi = TIERS[e.tier]
+    return '\n'.join([
+        f'━━ Q{e.idx} ━━ {e.q}',
+        f'模块：{e.module}',
+        f'范围：行 {e.lo}–{e.hi} · {e.tier}（{lo}–{hi}%）· raw 有效字 {eff} → 答案目标 {eff * lo // 100}–{eff * hi // 100} 字',
+        f'关键词（必须逐字出现）：{"、".join(e.keywords)}',
+        f'候选锚点（仅提示，可能是口水话或误转写）：{"、".join(anchors(src, e.lo, e.hi)) or "无"}',
+        f'第 {e.lo} 行的发言人：{speaker_at(src, e.lo)}',
+        '提醒：原文的限定语（可能、大概、应该、好像、似乎、类似于、某种程度上、我记得、我感觉）必须保留；只写范围内原文说过的话，不补附和、评语和推断。',
+        '原文（· 为前后语境行，只帮助理解，不计入分母）：',
+        raw_block(src, e.lo, e.hi, ctx=2),
+    ])
+
+
+VERIFY_PROMPT = '''你是讲座笔记的核验员。下面是一段讲座/对谈的原始转写（带行号）和笔记作者根据它写的答案。
+你的唯一任务：找出答案中与原文不符的地方。不要评价文笔，不要提风格建议，不要改写答案。
+
+只报告以下四类问题：
+- [无依据]：答案陈述了原文没有的事实、例子、数字、推断或评价。作者按“转写错误”说明还原的人名、术语，以及为人物补的公认身份（如“法国哲学家”），不算。答案与原文字面不同、但可能是对口语误转写的还原、头部又没有登记时，报为 [无依据] 并在说明开头写“疑似转写还原：”
+- [归属]：把 A 说的话写成 B 说的；或把讲者转述他人的观点写成讲者自己的观点，反之亦然
+- [曲解]：意思被改变、因果被颠倒、讲者的限定或不确定语气被去掉
+- [遗漏]：只在本 Q 行范围内被删掉的内容会让答案的结论变得错误或误导时报告；普通的压缩省略不算；问题标题涉及、但不在本 Q 行范围内的内容，属于别的 Q，不算遗漏
+
+以下情况不报：
+- 原文是口语转写，有错字、重复和口水话；作者按上下文把它们还原成通顺的书面语
+- 作者为人物补写的外文原名或全名（人名身份由作者另行查证）
+- 作者对讲话人使用的人称代词
+- 答案中“（转写错误：…）”“（内容存疑：…）”这类作者有意标注的括注
+- 答案用到了语境行（· 标记）里的内容，只要与原文一致
+- 你拿不准的地方。如果你的说明里需要写“无大碍”“基本一致”“拿不准”“仅提示”，就不要报这一条
+
+输出格式（严格遵守，不要输出任何其他文字）。没有问题时只输出一行：
+结论：通过
+有问题时：
+结论：待处置
+- [类别] 「答案中的原句片段」— 简要说明，原文第 N 行怎么说
+
+========== 笔记头部（讲话人身份与已知转写错误）==========
+{header}
+
+========== 原文 行 {lo}–{hi}（· 为语境行；第 {lo} 行的发言人：{speaker}）==========
+讲话人以原文中的“N号讲话人 / 发言人N”标号为准，标号之后到下一个标号之前都是同一人的发言。
+{raw}
+
+========== 问题 ==========
+{q}
+
+========== 答案 ==========
+{answer}
+'''
+
+
+def verify_packet(note, e, src):
+    header = '\n'.join(f'{k}：{note.header(k) or "无"}' for k in ('对谈人', '转写错误', '内容存疑'))
+    answer = '\n'.join(x for x in e.answer if x.strip())
+    return VERIFY_PROMPT.format(header=header, lo=e.lo, hi=e.hi, raw=raw_block(src, e.lo, e.hi, ctx=2), q=e.q, answer=answer, speaker=speaker_at(src, e.lo))
+
+
+def run_claude(prompt, model):
+    try:
+        r = subprocess.run(['claude', '-p', '--model', model, '--tools', '', '--no-session-persistence'],
+                           input=prompt, capture_output=True, text=True, timeout=300, cwd='/tmp')
+    except (OSError, subprocess.TimeoutExpired) as ex:
+        return None, str(ex)
+    if r.returncode:
+        return None, (r.stderr or r.stdout).strip()[:200]
+    return r.stdout.strip(), ''
+
+
+def parse_verdict(out):
+    lines = [l.strip() for l in out.splitlines() if l.strip()]
+    items = [re.sub(r'^[-*]\s*', '- ', l) for l in lines if re.match(r'^[-*]\s*\[(无依据|归属|曲解|遗漏)\]', l)
+             and not re.search(r'不成立|请忽略|可忽略|撤回|无误|没有问题|并无问题|不构成问题|不报|与原文一致|基本一致|无大碍|拿不准|仅提示', l)]
+    uniq = {}
+    for x in items:
+        uniq.setdefault(quote_key(x), x)
+    items = list(uniq.values())
+    if items:
+        return '待处置', items
+    if any(re.match(r'^\**结论\s*[:：]', l) and ('通过' in l or '待处置' in l) for l in lines):
+        return '通过', []   # 待处置条目全部是自我否定的提示时，按通过处理
+    return None, []
+
+
+def quote_key(item):
+    m = re.search(r'「([^」]+)」', item)
+    return m.group(1)[:30] if m else item[:40]
+
+
+def write_markers(path, results, recheck=False):
+    """results: {Q 序号: (状态, 条目)}；替换或插入核验标记。从后往前改，行号不漂移。"""
+    note = parse_note(path)
+    lines = note.lines[:]
+    for e in sorted(note.entries, key=lambda x: -x.note_line):
+        if e.idx not in results:
+            continue
+        status, items = results[e.idx]
+        if recheck and e.verify:
+            old = {quote_key(x) for x in e.verify['items']}
+            new = [x for x in items if quote_key(x) not in old]
+            items = e.verify['items'] + new
+            if status == '待处置' and not new:
+                status = '通过'
+            status = ('待处置' if status == '待处置' else '已处置') + '（复核）' if status != '失败' else '已处置'
+        block = [f'<!-- 核验：{status} -->'] if not items else [f'<!-- 核验：{status}', *items, '-->']
+        if e.verify:
+            lines[e.verify['line'] - 1:e.verify['end']] = block
+        else:
+            at = e.key_line or e.meta_line
+            lines[at:at] = block
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+
+def cmd_verify(a):
+    path = Path(a.note)
+    note, src = parse_note(path), Source(Path(a.raw) if a.raw else find_source(path))
+    if a.recheck:
+        targets = [e for e in note.entries if e.usable and e.verify and e.verify['status'] == '已处置' and not e.verify['rechecked']]
+        bad = [e.idx for e in note.entries if e.verify and e.verify['status'] == '待处置']
+        if bad:
+            print(f'Q{bad} 仍待处置，先处置再复核')
+            return 1
+    else:
+        targets = note.entries if a.all else select(note, a.qs, a.module)
+        targets = [e for e in targets if e.usable and e.answered and (a.force or e.verify is None or e.verify['status'] == '失败')]
+    if not targets:
+        print('没有需要核验的 Q（已核验的用 --force 重跑）')
+        return 0
+    if a.dry_run:
+        for e in targets:
+            print(verify_packet(note, e, src))
+        return 0
+    print(f'核验 {len(targets)} 条 Q × {a.passes} 次（model={a.model}, jobs={a.jobs}）…', flush=True)
+
+    def one(job):
+        e, _ = job
+        out, err = run_claude(verify_packet(note, e, src), a.model)
+        if out is None:
+            return e.idx, ('失败', [f'调用失败：{err}'])
+        status, items = parse_verdict(out)
+        if status is None:
+            return e.idx, ('失败', ['输出无法解析：' + out.replace('\n', ' ')[:200]])
+        return e.idx, (status, items)
+
+    # 每条 Q 独立核验 passes 次，合并发现：单次核验的召回有限，多次采样取并集
+    jobs = [(e, k) for e in targets for k in range(a.passes)]
+    with ThreadPoolExecutor(max_workers=a.jobs) as ex:
+        raw_results = list(ex.map(one, jobs))
+    results = {}
+    for idx, (status, items) in raw_results:
+        prev = results.get(idx)
+        if prev is None or prev[0] == '失败':
+            results[idx] = (status, items) if status != '失败' or prev is None else prev
+            continue
+        if status in ('失败', '通过'):
+            continue
+        seen = {quote_key(x) for x in prev[1]}
+        merged = prev[1] + [x for x in items if quote_key(x) not in seen]
+        results[idx] = ('待处置', merged)
+    write_markers(path, results, recheck=a.recheck)
+    for idx in sorted(results):
+        status, items = results[idx]
+        print(f'Q{idx}: {status}' + (f'（{len(items)} 条）' if items else ''))
+        for x in items:
+            print(f'    {x}')
+    print(f'已写回 {path}。待处置 {sum(s == "待处置" for s, _ in results.values())} 条 Q，失败 {sum(s == "失败" for s, _ in results.values())} 条 Q。')
+    return 0
+
+
+def cmd_pack(a):
+    path = Path(a.note)
+    note = parse_note(path)
+    src = Source(Path(a.raw) if a.raw else find_source(path))
+    if a.lines:
+        lo, hi = a.lines[0], min(a.lines[1], src.n)
+        print(f'raw 行 {lo}–{hi} · 有效字 {src.chars(lo, hi)} · 全文 {src.n} 行（方括号为区间内累计有效字）')
+        print(raw_block(src, lo, hi, cumulative=True))
+        return 0
+    if a.module is not None and not a.verify:
+        m = note.modules[a.module - 1] if 1 <= a.module <= len(note.modules) else None
+        if m is None:
+            raise SystemExit(f'模块序号应在 1–{len(note.modules)}')
+        if not any(e.module == m['title'] for e in note.entries):
+            if not m['range']:
+                raise SystemExit('该模块既没有模块范围也没有 Q，无法定位 raw')
+            lo, hi = m['range']
+            L = CFG['ledger']
+            print(f'━━ {m["title"]} ━━ 行 {lo}–{hi} · 有效字 {src.chars(lo, hi)}')
+            print(f'建账提示：单 Q ≤ {L["q_cap"]} 字；全文平均 {L["density"][0]}–{L["density"][1]} 字/Q。方括号为模块内累计有效字。')
+            print(raw_block(src, lo, hi, cumulative=True))
+            return 0
+    for e in select(note, a.qs, a.module):
+        if not e.usable:
+            print(f'Q{e.idx} 没有可用的行范围，跳过')
+            continue
+        print(verify_packet(note, e, src) if a.verify else write_packet(e, src))
+        print()
+    return 0
+
+
+def cmd_show(a):
+    path = Path(a.note)
+    note = parse_note(path)
+    src = Source(Path(a.raw) if a.raw else find_source(path))
+    if a.line:
+        n = a.line
+        hits = [f'Q{e.idx}「{e.q[:30]}」（{e.module}，行 {e.lo}–{e.hi}）' for e in note.entries if e.usable and e.lo <= n <= e.hi]
+        hits += [f'已舍弃内容（行 {lo}–{hi}）' for lo, hi in note.discards if lo <= n <= hi]
+        hits += [f'{m["title"]}（模块范围 {m["range"][0]}–{m["range"][1]}）' for m in note.modules if m['range'] and m['range'][0] <= n <= m['range'][1]]
+        print(f'raw 行 {n}：{src.lines[n - 1][:80] if 1 <= n <= src.n else "（越界）"}')
+        print('归属：' + ('；'.join(hits) if hits else '未被任何 Q 或舍弃区间覆盖' + ('（机械噪声）' if n in src.noise else '')))
+        return 0
+    for e in select(note, a.qs, a.module):
+        if not e.usable:
+            continue
+        eff, ans, actual = q_ratio(e, src)
+        lo, hi = TIERS[e.tier]
+        print(f'━━ Q{e.idx} ━━ {e.q}')
+        print(f'行 {e.lo}–{e.hi} · {e.tier} {lo}–{hi}% · 实际 {actual:.0f}%（{ans}/{eff}）· 关键词 {"、".join(e.keywords)}')
+        print('── raw ──')
+        print(raw_block(src, e.lo, e.hi))
+        print('── 答案 ──')
+        print('\n'.join(x for x in e.answer if x.strip()) or '（空）')
+        if e.verify:
+            print(f'── 核验：{e.verify["status"]} ──')
+            print('\n'.join(e.verify['items']))
+        print()
+    return 0
+
+
+def cmd_strip(a):
+    path = Path(a.note)
+    note = parse_note(path)
+    bad = [e.idx for e in note.entries if e.verify and e.verify['status'] not in ('通过', '已处置')]
+    if bad:
+        print(f'Q{bad} 的核验尚未处置，拒绝清理')
+        return 1
+    drop = set()
+    for e in note.entries:
+        if e.verify:
+            drop.update(range(e.verify['line'], e.verify['end'] + 1))
+    path.write_text('\n'.join(s for i, s in enumerate(note.lines, 1) if i not in drop) + '\n', encoding='utf-8')
+    print(f'已删除 {len(drop)} 行核验标记')
+    return 0
+
+
+# ── links：概念双向链接 ─────────────────────────────────────
+
+def drop_links(note_arg):
+    stem = Path(note_arg).resolve().relative_to(ROOT).with_suffix('').as_posix()
+    total = 0
+    for cf in sorted((ROOT / '_concepts').glob('*.md')):
+        lines = cf.read_text(encoding='utf-8').splitlines()
+        keep = [s for s in lines if not (s.lstrip().startswith('- [[') and f'[[{stem}#' in s)]
+        if len(keep) != len(lines):
+            total += len(lines) - len(keep)
+            cf.write_text('\n'.join(keep) + '\n', encoding='utf-8')
+    print(f'已从 _concepts 删除 {total} 条指向 {stem} 的回链（标题保留）')
+    return 0
+
+
+def cmd_links(a):
+    if a.drop:
+        return drop_links(a.drop)
+    link = re.compile(r'\[\[([^#|\]]+)#([^|\]]+)(?:\|[^\]]*)?\]\]')
+    concept_side, note_side, sections, problems = set(), set(), {}, []
+    for cf in sorted((ROOT / '_concepts').glob('*.md')):
+        cur = None
+        for s in cf.read_text(encoding='utf-8').splitlines():
+            m = re.match(r'^##\s+(.+)$', s)
+            if m:
+                cur = m.group(1).strip()
+                if cf.stem == '人物' and '待核' in cur:
+                    problems.append(f'[人物待核] _concepts/人物.md ## {cur}：待核人物不建条目')
+            elif cur:
+                for np, ns in link.findall(s):
+                    concept_side.add((cf.stem, cur, np, ns.strip()))
+    for nd in sorted(d for d in ROOT.iterdir() if d.is_dir() and not d.name.startswith(('.', '_'))):
+        for nf in sorted(nd.rglob('*.md')):
+            if 'raw' in nf.parts:
+                continue
+            stem = nf.relative_to(ROOT).with_suffix('').as_posix()
+            sections[stem], cur = set(), None
+            for s in nf.read_text(encoding='utf-8').splitlines():
+                m = re.match(r'^##\s+(.+)$', s)
+                if m:
+                    cur = m.group(1).strip()
+                    sections[stem].add(cur)
+                elif cur and CONCEPT_RE.match(s.strip()):
+                    for cf, cn in link.findall(s):
+                        note_side.add((stem, cur, cf, cn.strip()))
+    for cf, cn, np, ns in sorted(concept_side):
+        if (np, ns, cf, cn) in note_side:
+            continue
+        why = f'{np}.md 不存在' if np not in sections else (f'{np}.md 没有 ## {ns}' if ns not in sections[np] else f'该模块概念行缺 [[{cf}#{cn}]]')
+        problems.append(f'[概念→笔记] _concepts/{cf}.md ## {cn} → {np}#{ns}：{why}')
+    names = {(cf, cn) for cf, cn, _, _ in concept_side}
+    for np, ns, cf, cn in sorted(note_side):
+        if (cf, cn, np, ns) in concept_side:
+            continue
+        why = f'_concepts/{cf}.md 没有 ## {cn}' if (cf, cn) not in names else f'_concepts/{cf}.md ## {cn} 下缺少指向本模块的链接'
+        problems.append(f'[笔记→概念] {np}#{ns} → [[{cf}#{cn}]]：{why}')
+    if a.note:
+        stem = Path(a.note).resolve().relative_to(ROOT).with_suffix('').as_posix()
+        problems = [p for p in problems if stem in p or p.startswith('[人物待核]')]
+    for p in problems:
+        print(p)
+    print(f'概念侧 {len(concept_side)} 条 · 笔记侧 {len(note_side)} 条 · 问题 {len(problems)} 个' + (f'（只看 {a.note}）' if a.note else ''))
+    return 1 if problems else 0
+
+
+# ── rebreak / 原文定位 ───────────────────────────
+
+def find_source(p: Path):
+    d = p.parent / 'raw'
+    if not d.is_dir():
+        raise FileNotFoundError(f'{d} 不存在，请用 --raw 指定原文')
+    cs = sorted(d.glob('*.txt'))
+    base = re.sub(r'_v\d+$', '', p.stem)
+    for stem in (p.stem, base):
+        for c in cs:
+            if c.stem == stem:
+                return c
+    hits = [c for c in cs if c.stem.split('_')[0] == base.split('_')[0]]
     if len(hits) == 1:
         return hits[0]
-    die(f'无法为 {note_path.name} 匹配原文（候选: {[c.name for c in (hits or cands)]}），'
-        f'请显式传入原文路径')
+    raise FileNotFoundError(f'无法唯一匹配 {p.name} 的原文，请用 --raw 指定')
 
 
-def die(msg):
-    print(f'[FATAL] {msg}', file=sys.stderr)
-    sys.exit(2)
-
-
-# ── 核对与报告 ──────────────────────────────────────────────────────────
-def check(note_path, source_path, stage='full'):
-    full = stage == 'full'
-    note = parse_note(note_path, require_answers=full)
-    src = Source(source_path)
-
-    issues = check_format(note, src)          # 必须先跑：它标掉非法行范围
-    sp_issues, sp = check_split(note, src)
-    cov_issues, cov = check_coverage(note, src)
-    issues += sp_issues + cov_issues
-    if full:
-        rat_issues, rat = check_ratio(note, src)
-        issues += rat_issues
+def cmd_rebreak(a):
+    new = Path(a.new)
+    nt = new.read_text(encoding='utf-8')
+    if a.old:
+        ot, base = Path(a.old).read_text(encoding='utf-8'), a.old
     else:
-        rat = dict(rows=[], n=0, total=0.0, mean=0.0, mean_abs=0.0,
-                   tight=0, loose=0, neg_frac=0.0)
-    anc_issues, anc = check_anchors(note, full)
-    issues += anc_issues
-
-    return dict(note=note, src=src, issues=issues, stage=stage,
-                split=sp, coverage=cov, ratio=rat, anchors=anc)
-
-
-def verdict(issues, check=None):
-    """某项检查（或全部）的结论：FAIL / WARN / PASS。"""
-    sel = [i for i in issues if check is None or i.check == check]
-    if any(i.level == 'ERROR' for i in sel):
-        return 'FAIL'
-    return 'WARN' if sel else 'PASS'
-
-
-def render(res):
-    """打印一份人读与模型读都成立的报告：先结论，再明细，最后逐条修复指令。"""
-    note, src, issues = res['note'], res['src'], res['issues']
-    sp, cov, rat, anc = res['split'], res['coverage'], res['ratio'], res['anchors']
-    full = res['stage'] == 'full'
-
-    n_noise = len(src.noise)
-    tag = '' if full else '  ·  账本审计（--stage ledger）'
-    print(f'笔记 {note.path}  ·  {len(note.entries)} 条 Q{tag}')
-    print(f'原文 {src.path}  ·  {src.n} 行 / {src.raw_chars} 字'
-          f'  ·  剔除噪音 {n_noise} 行 {src.noise_chars} 字后，有效 {src.chars()} 字')
-    if n_noise:
-        for i in sorted(src.noise)[:2]:
-            print(f'       噪音行示例 → 行 {i}: {src.lines[i - 1].strip()[:40]}')
-    print()
-
-    gaps = cov['gaps']
-    silent = sum(1 for g in gaps if g['silent'])
-    print(f'[1/5] 格式    {verdict(issues, "格式"):<4}  '
-          f'{sum(1 for i in issues if i.check == "格式")} 处问题')
-    print(f'[2/5] 切分    {verdict(issues, "切分"):<4}  '
-          f'{sp["n"]} 条可核算 Q · 密度 {sp["density"]:.0f} 字/Q'
-          f'（带 {DENSITY_BAND[0]}–{DENSITY_BAND[1]}，单 Q 上限 {Q_CAP}）')
-    print(f'[3/5] 覆盖    {verdict(issues, "覆盖"):<4}  '
-          f'覆盖 {cov["covered"]}/{cov["total"]} 行；静默丢弃 {silent} 处，'
-          f'已登记舍弃 {len(gaps) - silent} 处，碎片豁免 {cov["exempt"]} 处')
-    if full and rat['n']:
-        print(f'[4/5] 压缩比  {verdict(issues, "压缩比"):<4}  '
-              f'总 {rat["total"]:.1f}%（带 {TOTAL_BAND[0]}–{TOTAL_BAND[1]}）；'
-              f'平均偏差 {rat["mean"]:+.1f}pp（|偏差| {rat["mean_abs"]:.1f}pp）；'
-              f'偏狠/偏松 {rat["tight"]}/{rat["loose"]}')
-    elif full:
-        print(f'[4/5] 压缩比  --    没有可核算的条目')
-    else:
-        print(f'[4/5] 压缩比  --    账本阶段不核算')
-    anc_note = '' if full else '（兑现在成品审计时核对）'
-    print(f'[5/5] 锚点    {verdict(issues, "锚点"):<4}  '
-          f'深压缩 Q {anc["deep"]} 条 · 已申报 {anc["declared"]} 条{anc_note}')
-    print()
-
-    if rat['rows']:
-        print('== 压缩比明细（实际值 = 答案字 ÷ 剔除噪音后的原文字） ==')
-        print(f'{"笔记行":>6}{"原文行":>12}{"有效字":>8}{"答案字":>8}{"声明":>6}{"实际":>6}{"偏差":>7}  {"":<4} Q')
-        for r in rat['rows']:
-            span = '{}-{}'.format(r['lo'], r['hi'])
-            print(f'{r["note_line"]:>6}{span:>12}{r["eff"]:>8}{r["ans"]:>8}'
-                  f'{r["decl"]:>6}{r["actual"]:>6.0f}{r["dev"]:>+7.0f}  {r["flag"]:<4} {r["q"]}')
-        print()
-
-    if gaps:
-        print('== 覆盖缺口 ==')
-        for g in gaps:
-            tag = '静默丢弃 [ERROR]' if g['silent'] else '已在"已舍弃内容"登记'
-            print(f'  行 {g["lo"]}–{g["hi"]}（{g["chars"]} 字）: {tag}')
-        print()
-
-    if issues:
-        print('== 待处理 ==')
-        order = {'ERROR': 0, 'WARN': 1}
-        for i in sorted(issues, key=lambda x: (order[x.level], x.check, x.line)):
-            loc = f'笔记行 {i.line} · ' if i.line else ''
-            print(f'[{i.level}] {i.check} · {loc}{i.msg}')
-            if i.fix:
-                print(f'        → {i.fix}')
-        print()
-
-    n_err = sum(1 for i in issues if i.level == 'ERROR')
-    n_warn = len(issues) - n_err
-    print(f'结论 {verdict(issues)} · {n_err} ERROR / {n_warn} WARN')
-
-
-def as_json(res):
-    note, src, issues = res['note'], res['src'], res['issues']
-    return dict(
-        note=str(note.path), source=str(src.path), stage=res['stage'],
-        verdict=verdict(issues),
-        checks={k: verdict(issues, k) for k in CHECKS},
-        source_stats=dict(lines=src.n, chars=src.raw_chars,
-                          noise_lines=len(src.noise), noise_chars=src.noise_chars,
-                          effective_chars=src.chars()),
-        split=res['split'], coverage=res['coverage'],
-        ratio=res['ratio'], anchors=res['anchors'],
-        issues=[dict(level=i.level, check=i.check, note_line=i.line, msg=i.msg, fix=i.fix)
-                for i in issues],
-    )
-
-
-# ── 改行校验 ────────────────────────────────────────────────────────────
-def run_rebreak(new_path, old_path):
-    """校验 raw 的改行编辑只动了换行：新旧版本去除全部空白后必须逐字节相同。
-
-    基线缺省取 git HEAD 里的已提交版本；raw 尚未入库、或要对任意旧版比对时，
-    显式传入原版文件。守恒口径与计字口径同源（都按非空白字符），因此改行不影响
-    任何有效字数的核算。
-    """
-    new_text = new_path.read_text(encoding='utf-8')
-    if old_path is not None:
-        old_text = old_path.read_text(encoding='utf-8')
-        base = str(old_path)
-    else:
-        r = subprocess.run(['git', '-C', str(new_path.parent), 'show',
-                            f'HEAD:./{new_path.name}'],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            die(f'{new_path.name} 没有已提交的基线版本（{r.stderr.strip()[:60]}）；'
-                f'先提交 raw 入库，或显式传入原版: --rebreak <新版.txt> <原版.txt>')
-        old_text = r.stdout
-        base = f'HEAD:{new_path.name}'
-
-    a = re.sub(r'\s', '', old_text)
-    b = re.sub(r'\s', '', new_text)
-    old_n = len(old_text.splitlines())
-    new_n = len(new_text.splitlines())
-    print(f'基线 {base}  ·  {old_n} 行 / {len(a)} 字')
-    print(f'现版 {new_path}  ·  {new_n} 行 / {len(b)} 字')
-
-    if a == b:
-        print(f'[PASS] 内容守恒：去除空白后逐字节相同；行数 {old_n} → {new_n}（{new_n - old_n:+d}）')
-        if new_n < old_n:
-            print('[WARN] 行数减少，有行被合并：原有行号整体前移，重核对所有已写的行范围')
+        r = subprocess.run(['git', '-C', str(new.parent), 'show', f'HEAD:./{new.name}'], capture_output=True, text=True)
+        if r.returncode:
+            raise FileNotFoundError('没有 git 基线，请显式传入原版文件')
+        ot, base = r.stdout, f'HEAD:{new.name}'
+    x, y = re.sub(r'\s', '', ot), re.sub(r'\s', '', nt)
+    print(f'基线 {base} · {len(ot.splitlines())} 行；现版 {new} · {len(nt.splitlines())} 行')
+    if x == y:
+        print('[PASS] 去除空白后逐字一致')
+        if len(nt.splitlines()) < len(ot.splitlines()):
+            print('[WARN] 行数减少，有行被合并，须重核行号')
         return 0
-
-    i = next((k for k, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
-    print(f'[FAIL] 内容不守恒：第 {i + 1} 个非空白字符起分歧')
-    print(f'       基线: …{a[max(0, i - 20):i + 20]}…')
-    print(f'       现版: …{b[max(0, i - 20):i + 20]}…')
-    print('       → 回退 raw 到基线版本，重新做只插入换行的编辑')
+    i = next((i for i, (p, q) in enumerate(zip(x, y)) if p != q), min(len(x), len(y)))
+    print(f'[FAIL] 第 {i + 1} 个非空白字符处分歧：基线“{x[i:i + 10]}” / 现版“{y[i:i + 10]}”')
     return 1
 
 
-# ── 指标基底回算 ────────────────────────────────────────────────────────
-def pctl(xs, p):
-    xs = sorted(xs)
-    return xs[min(len(xs) - 1, int(p / 100 * len(xs)))] if xs else 0
-
-
-def run_baseline(paths, explicit):
-    """对已提交的好笔记回算指标基底的实测分布，供人工修订常数。不自动更新。"""
-    effs, decls, dens, tots = [], [], [], []
-    print(f'{"笔记":<44}{"Q数":>4}{"有效字":>8}{"字/Q":>7}{"总压缩":>8}')
-    for p in paths:
-        res = check(p, explicit or find_source(p), 'full')
-        rat, src = res['ratio'], res['src']
-        if not rat['n']:
-            print(f'{p.name[:42]:<44}  --  没有可核算的条目')
-            continue
-        density = src.chars() / rat['n']
-        dens.append(density)
-        tots.append(rat['total'])
-        for r in rat['rows']:
-            effs.append(r['eff'])
-            decls.append(r['decl'])
-        print(f'{p.name[:42]:<44}{rat["n"]:>4}{src.chars():>8}{density:>7.0f}{rat["total"]:>7.1f}%')
-    if not effs:
-        print('\n没有可核算的条目，无法回算。')
-        return
-    print()
-    print(f'单 Q 有效字   p50={pctl(effs, 50)}  p75={pctl(effs, 75)}  p90={pctl(effs, 90)}  '
-          f'max={max(effs)}    ← Q_CAP 当前 {Q_CAP}')
-    print(f'密度（字/Q）  min={min(dens):.0f}  max={max(dens):.0f}    '
-          f'← DENSITY_BAND 当前 {DENSITY_BAND}')
-    print(f'总压缩（%）   min={min(tots):.1f}  max={max(tots):.1f}    '
-          f'← TOTAL_BAND 当前 {TOTAL_BAND}')
-    print(f'声明值（%）   p25={pctl(decls, 25)}  p50={pctl(decls, 50)}  p75={pctl(decls, 75)}    '
-          f'← ANCHOR_TIER 当前 {ANCHOR_TIER}')
-    print('\n以上为实测分布，确认后人工修订本脚本常数区与 WORKFLOW 中的对应描述。')
-
-
-# ── 入口 ────────────────────────────────────────────────────────────────
 def main(argv=None):
-    ap = argparse.ArgumentParser(
-        prog='check_note.py', add_help=True,
-        description='按 WORKFLOW.md 核对笔记：格式 / 切分 / 覆盖 / 压缩比 / 锚点',
-        epilog='原文缺省时在 <笔记目录>/raw/ 下自动匹配。')
-    ap.add_argument('paths', nargs='+', metavar='笔记.md',
-                    help='一个或多个笔记；末尾可跟一个 .txt 作为显式原文（仅单篇时有效）')
-    ap.add_argument('--stage', choices=('full', 'ledger'), default='full',
-                    help='ledger = 细切建账后的账本审计（不核算压缩比、不要求答案）')
-    ap.add_argument('--json', action='store_true', help='输出 JSON，供程序消费')
-    ap.add_argument('--baseline', action='store_true',
-                    help='对给定笔记回算指标基底的实测分布，供人工修订常数')
-    ap.add_argument('--rebreak', action='store_true',
-                    help='校验 raw 的改行编辑：只许动换行。参数为 <新版.txt> [<原版.txt>]，'
-                         '原版缺省取 git HEAD 版本')
-    args = ap.parse_args(argv)
+    ap = argparse.ArgumentParser(description='按 WORKFLOW.md 审计讲座笔记')
+    sub = ap.add_subparsers(dest='cmd', required=True)
 
-    paths = [Path(p) for p in args.paths]
+    p = sub.add_parser('check', help='自动判断阶段并累计审计')
+    p.add_argument('notes', nargs='+')
+    p.add_argument('--raw')
+    p.add_argument('--stage', choices=STAGES, help='手动指定阶段（默认自动判断）')
+    p.add_argument('--json', action='store_true')
 
-    if args.rebreak:
-        if not 1 <= len(paths) <= 2:
-            die('--rebreak 需要 1 或 2 个参数: <新版.txt> [<原版.txt>]')
-        for p in paths:
-            if not p.is_file():
-                die(f'文件不存在: {p}')
-        return run_rebreak(paths[0], paths[1] if len(paths) == 2 else None)
+    p = sub.add_parser('pack', help='输出 raw 切片 / 写作包 / 核验包')
+    p.add_argument('note')
+    p.add_argument('qs', nargs='*', help='Q12 或 Q12-Q15')
+    p.add_argument('--module', type=int, help='模块序号（从 1 起）')
+    p.add_argument('--lines', type=int, nargs=2, metavar=('LO', 'HI'))
+    p.add_argument('--verify', action='store_true', help='输出核验包')
+    p.add_argument('--raw')
 
-    explicit = None
-    if len(paths) == 2 and paths[1].suffix == '.txt':
-        paths, explicit = paths[:1], paths[1]
+    p = sub.add_parser('verify', help='用 claude -p 全新上下文逐条核验')
+    p.add_argument('note')
+    p.add_argument('qs', nargs='*')
+    p.add_argument('--module', type=int)
+    p.add_argument('--all', action='store_true')
+    p.add_argument('--force', action='store_true', help='重跑已核验的 Q')
+    p.add_argument('--recheck', action='store_true', help='复核：对已处置的 Q 再核验一次，新发现追加在原记录后')
+    p.add_argument('--model', default='sonnet')
+    p.add_argument('--jobs', type=int, default=6)
+    p.add_argument('--passes', type=int, default=2, help='每条 Q 独立核验次数，发现取并集')
+    p.add_argument('--dry-run', action='store_true', help='只打印核验包')
+    p.add_argument('--raw')
 
-    for p in paths + ([explicit] if explicit else []):
-        if not p.is_file():
-            die(f'文件不存在: {p}')
+    p = sub.add_parser('show', help='人工复核')
+    p.add_argument('note')
+    p.add_argument('qs', nargs='*')
+    p.add_argument('--module', type=int)
+    p.add_argument('--line', type=int, help='反查 raw 某行属于哪条 Q')
+    p.add_argument('--raw')
 
-    if args.baseline:
-        run_baseline(paths, explicit)
-        return 0
+    p = sub.add_parser('strip', help='删除已处置的核验标记')
+    p.add_argument('note')
 
-    results, worst = [], 0
-    for i, p in enumerate(paths):
-        res = check(p, explicit or find_source(p), args.stage)
-        if verdict(res['issues']) == 'FAIL':   # 退出码的口径与报告结论同源
-            worst = 1
-        if args.json:
-            results.append(as_json(res))
-        else:
-            if i:
-                print('\n' + '─' * 72 + '\n')
-            render(res)
+    p = sub.add_parser('links', help='检查概念双向链接')
+    p.add_argument('note', nargs='?', help='只报告与该笔记有关的问题')
+    p.add_argument('--drop', metavar='笔记.md', help='删除 _concepts 中指向该笔记的全部回链（重做笔记时用）')
 
-    if args.json:
-        print(json.dumps(results if len(results) > 1 else results[0],
-                         ensure_ascii=False, indent=2))
-    return worst
+    p = sub.add_parser('rebreak', help='校验 raw 改行只改变空白')
+    p.add_argument('new')
+    p.add_argument('old', nargs='?')
+
+
+    a = ap.parse_args(argv)
+    try:
+        if a.cmd == 'check':
+            rs = [run_check(Path(x), Path(a.raw) if a.raw else None, a.stage) for x in a.notes]
+            if a.json:
+                out = [{'note': str(r['note'].path), 'stage': r['stage'], 'verdict': verdict(r['issues']),
+                        'stats': r['stats'], 'issues': [i.__dict__ for i in r['issues']]} for r in rs]
+                print(json.dumps(out if len(out) > 1 else out[0], ensure_ascii=False, indent=2))
+            else:
+                for k, r in enumerate(rs):
+                    if k:
+                        print('\n' + '─' * 60)
+                    render(r)
+            return 1 if any(verdict(r['issues']) == 'FAIL' for r in rs) else 0
+        return {'pack': cmd_pack, 'verify': cmd_verify, 'show': cmd_show, 'strip': cmd_strip,
+                'links': cmd_links, 'rebreak': cmd_rebreak}[a.cmd](a)
+    except (FileNotFoundError, OSError) as ex:
+        print(f'[FATAL] {ex}', file=sys.stderr)
+        return 2
 
 
 if __name__ == '__main__':
