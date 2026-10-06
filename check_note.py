@@ -7,7 +7,7 @@
   pack     输出带行号的 raw 切片 / 写作包 / 核验包
   verify   用全新上下文（claude -p）逐条核验答案，结果写回笔记
   show     人工复核：对照某条 Q 的 raw 与答案；或反查 raw 某行归属
-  strip    删除已处置的核验标记
+  strip    定稿：人工复核无待核项后，删除核验标记与正文转写错误括注
   links    检查 _concepts 与笔记模块的双向链接
   rebreak  校验 raw 改行只改变了空白
 """
@@ -30,10 +30,10 @@ FORMS = {k: tuple(v) for k, v in CFG['forms'].items()}
 HEADER_FIELDS = ['来源', '对谈人', '已舍弃内容', '内容存疑', '转写错误']
 CONCEPT_ORDER = ['人物', '学派与方法', '核心概念', '精神分析']
 LABELS = {'书目': 1, '脉络': 2, '概念': 3, '话题': 4}
-STAGES = ['source', 'modules', 'ledger', 'draft', 'verify', 'concepts', 'left', 'complete']
+STAGES = ['source', 'modules', 'ledger', 'draft', 'verify', 'concepts', 'left', 'complete', 'final']
 STAGE_NAMES = {'source': '步骤 0 来源底稿', 'modules': '步骤 1 粗切', 'ledger': '步骤 2 建账',
                'draft': '步骤 3 提炼', 'verify': '步骤 4 核验', 'concepts': '步骤 5 概念链接',
-               'left': "步骤 6 What's Left", 'complete': '完成'}
+               'left': "步骤 6 What's Left", 'complete': '完成', 'final': '步骤 7 定稿'}
 
 NOISE_RE = re.compile(r'^\s*(?:\d+|\d+号讲话人.*|发言人\s*\d+.*|\d{1,2}:\d{2}(?::\d{2})?)\s*$')
 Q_RE = re.compile(r'^###\s+\*\*Q\*\*:(.*)$')
@@ -49,6 +49,7 @@ FORM_RE = re.compile(r'形式：(' + '|'.join(FORMS) + ')')
 DISCARD_RE = re.compile(r'行\s*(\d+)(?:\s*–\s*(\d+))?')
 LINK_RE = re.compile(r'^\[\[([^#\]|]+)(?:#([^\]|]+))?(?:\|[^\]]+)?\]\]$')
 ANNOT_RE = re.compile(r'（[^（）]*(?:转写错误|内容存疑)：[^）]*）')
+TRANS_RE = re.compile(r'（[^（）]*转写错误：[^）]*）')
 STOPWORDS = set('''the and that this with have from they what your about there their would which when were been
 will just like know think yeah okay right going really because them then than also some very more into could
 should here where those these only even much other well actually something people thing things kind sort mean
@@ -563,6 +564,9 @@ def detect_stage(note):
         return 'modules' if note.modules else 'source'
     if not any(e.answered for e in note.entries):
         return 'ledger'
+    if (all(e.answered and e.verify is None for e in note.entries)
+            and all(m['concept'] for m in note.modules) and any(L_RE.match(s) for s in note.lines)):
+        return 'final'      # strip 已清掉核验标记
     if not all(e.answered for e in note.entries) or any(e.verify is None for e in note.entries):
         return 'draft'
     if any(e.verify['status'] not in ('通过', '已处置') for e in note.entries):
@@ -582,7 +586,8 @@ NEXT = {
     'verify': '步骤 5：为每个模块写概念行并在 _concepts 回链，然后运行 links。',
     'concepts': "概念行齐全、links 通过后，步骤 6：在文末写 ## L: What's Left。",
     'left': "步骤 6：在文末写 ## L: What's Left。",
-    'complete': '全部自动检查通过。按 WORKFLOW 收尾清单自查后交付。',
+    'complete': '全部自动检查通过。交付人工复核，按反馈修改；待核项全部解决后，步骤 7：strip <笔记> 定稿。',
+    'final': '已定稿。',
 }
 
 
@@ -602,12 +607,16 @@ def run_check(path, raw, stage=None):
         if k >= STAGES.index('draft'):
             x, stats['ratio'] = check_draft(note, src, usable)
             issues += x
-        if k >= STAGES.index('verify'):
+        if k >= STAGES.index('verify') and stage != 'final':
             issues += check_verify(note, usable)
         if k >= STAGES.index('concepts'):
             issues += check_concepts(note)
         if k >= STAGES.index('complete'):
             issues += check_left(note)
+        if stage == 'final':
+            left = [e.idx for e in usable if any(TRANS_RE.search(x) for x in e.answer)]
+            if left:
+                issues.append(Issue('WARN', '定稿', f'Q{left} 正文仍有转写错误括注', f'strip {note.path.name}'))
     return {'note': note, 'source': src, 'stage': stage, 'issues': issues, 'stats': stats}
 
 
@@ -927,12 +936,34 @@ def cmd_strip(a):
     if bad:
         print(f'Q{bad} 的核验尚未处置，拒绝清理')
         return 1
+    if detect_stage(note) not in ('complete', 'final'):
+        print('笔记尚未完成步骤 6，拒绝清理')
+        return 1
+    pending = []
+    if '待核' in (note.header('转写错误') or ''):
+        pending.append('头部“转写错误”')
+    pending += [f'Q{e.idx}' for e in note.entries if any('待核' in m for x in e.answer for m in TRANS_RE.findall(x))]
+    if pending:
+        print(f'{"、".join(pending)} 仍有待核的转写错误，人工复核解决后再定稿')
+        return 1
+    mixed = [f'Q{e.idx}' for e in note.entries if any('内容存疑：' in m for x in e.answer for m in TRANS_RE.findall(x))]
+    if mixed:
+        print(f'{"、".join(mixed)} 有同时含“转写错误”和“内容存疑”的括注，先拆成两个括注')
+        return 1
     drop = set()
     for e in note.entries:
         if e.verify:
             drop.update(range(e.verify['line'], e.verify['end'] + 1))
-    path.write_text('\n'.join(s for i, s in enumerate(note.lines, 1) if i not in drop) + '\n', encoding='utf-8')
-    print(f'已删除 {len(drop)} 行核验标记')
+    out, n = [], 0
+    for i, s in enumerate(note.lines, 1):
+        if i in drop:
+            continue
+        if not s.startswith('>') and TRANS_RE.search(s):
+            s, k = TRANS_RE.subn('', s)
+            n += k
+        out.append(s)
+    path.write_text('\n'.join(out) + '\n', encoding='utf-8')
+    print(f'已删除 {len(drop)} 行核验标记、{n} 处正文转写错误括注（头部登记保留）')
     return 0
 
 
@@ -1079,7 +1110,7 @@ def main(argv=None):
     p.add_argument('--line', type=int, help='反查 raw 某行属于哪条 Q')
     p.add_argument('--raw')
 
-    p = sub.add_parser('strip', help='删除已处置的核验标记')
+    p = sub.add_parser('strip', help='定稿：删除核验标记与正文转写错误括注')
     p.add_argument('note')
 
     p = sub.add_parser('links', help='检查概念双向链接')
